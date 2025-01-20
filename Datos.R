@@ -1,52 +1,55 @@
-id_posición,Números Enteros;
-nombre_posicion,Texto;
-tipo_de_posicion,Texto;
-motivo_de_posicion,Texto;
-código_motivo_de_posición,Texto;
-código_motivo_especifico,Texto;
-presupuestada,True/False;
-status,Texto;
-vacante,True/False;
-código_centro_de_costos,Números Enteros;
-motivo_inactivacion,Texto;
-código_motivo_inactivacion,Texto;
-centro_de_costos,Texto;
-division,Texto;
-departamento,Texto;
-regional,Texto;
-plaza,Texto;
-estado,Texto;
-ubicacion,Texto;
-municipio,Texto;
-localidad,Texto;
-nombre,Texto;
-nombre_jefe,Texto;
-fecha_creacion,Fecha;
-fecha_inicio,Fecha;
-fecha_vacante,Fecha;
-área_de_personal_posición,Texto;
-días_laborables_por_semana,Números Enteros;
-effective_end_date,Fecha;
-effective_start_date,Fecha;
-id_colaborador,Números Enteros;
-area_de_cobranza,Texto;
-area_de_personal_puesto,Texto;
-clasificación_de_riesgo,Texto;
-clasificación_liderazgo,Texto;
-descripción,Texto;
-fecha_fin_puesto,Fecha;
-fecha_inicio_puesto,Fecha;
-nombre_de_puesto,Texto;
-perfil_profesional,Texto;
-puesto_generico,Texto;
-segmento_de_puesto,Texto;
-tabulador_salarial,Texto;
-tipo_reclutamiento,Texto;
-pruebas_psicométricas,Texto;
-código_centro_de_costos_superior,Números Enteros;
-centro_de_costos_superior,Texto;
-id_centro_de_costos,Números Enteros;
-etiqueta_centro_de_costos,Texto;
-código_plaza,Texto;
-plaza_centro_de_costos,Texto;
-nombre_centro_de_costos,Texto;
+CREATE TABLE hist_posiciones (
+    id_key INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_posicion INTEGER,
+    nombre_posicion TEXT,
+    tipo_de_posicion TEXT,
+    motivo_de_posicion TEXT,
+    codigo_motivo_de_posicion TEXT,
+    codigo_motivo_especifico TEXT,
+    presupuestada BOOLEAN,
+    status TEXT,
+    vacante BOOLEAN,
+    codigo_centro_de_costos INTEGER,
+    motivo_inactivacion TEXT,
+    codigo_motivo_inactivacion TEXT,
+    centro_de_costos TEXT,
+    division TEXT,
+    departamento TEXT,
+    regional TEXT,
+    plaza TEXT,
+    estado TEXT,
+    ubicacion TEXT,
+    municipio TEXT,
+    localidad TEXT,
+    nombre TEXT,
+    nombre_jefe TEXT,
+    fecha_creacion DATE,
+    fecha_inicio DATE,
+    fecha_vacante DATE,
+    area_de_personal_posicion TEXT,
+    dias_laborables_por_semana INTEGER,
+    effective_end_date DATE,
+    effective_start_date DATE,
+    id_colaborador INTEGER,
+    area_de_cobranza TEXT,
+    area_de_personal_puesto TEXT,
+    clasificacion_de_riesgo TEXT,
+    clasificacion_liderazgo TEXT,
+    descripcion TEXT,
+    fecha_fin_puesto DATE,
+    fecha_inicio_puesto DATE,
+    nombre_de_puesto TEXT,
+    perfil_profesional TEXT,
+    puesto_generico TEXT,
+    segmento_de_puesto TEXT,
+    tabulador_salarial TEXT,
+    tipo_reclutamiento TEXT,
+    pruebas_psicometricas TEXT,
+    codigo_centro_de_costos_superior INTEGER,
+    centro_de_costos_superior TEXT,
+    id_centro_de_costos INTEGER,
+    etiqueta_centro_de_costos TEXT,
+    codigo_plaza TEXT,
+    plaza_centro_de_costos TEXT,
+    nombre_centro_de_costos TEXT
+)
