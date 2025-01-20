@@ -16,21 +16,21 @@ for (date in seq(start_date, end_date, by = "day")) {
   file_full_path <- file.path(file_path, file_name)
 
   if (file.exists(file_full_path)) {
+    print(paste("Procesando archivo:", file_name))
     tryCatch({
-      # Leer archivo CSV con UTF-8 y omitir la primera fila
+      # Leer archivo CSV con UTF-8, detectando separador y revisando nombres de columnas
       data <- read.csv(file_full_path, fileEncoding = "UTF-8", skip = 1, stringsAsFactors = FALSE, na.strings = c("", "NA"))
-      
-      # Depuración: mostrar nombres de columnas y primeras filas
-      print(paste("Procesando archivo:", file_name))
-      print("Nombres de columnas detectados:")
-      print(colnames(data))
 
-      # Verificar si el dataframe tiene contenido
+      # Verificar contenido del archivo
       if (nrow(data) == 0) {
-        stop(paste("El archivo", file_name, "está vacío o tiene un formato incorrecto."))
+        stop(paste("El archivo", file_name, "está vacío o mal estructurado."))
       }
 
-      # Normalizar los nombres de columna eliminando acentos y caracteres especiales
+      # Mostrar columnas y filas cargadas para depuración
+      print(paste("Columnas detectadas en", file_name, ":", paste(colnames(data), collapse = ", ")))
+      print(paste("Número de filas:", nrow(data)))
+
+      # Normalizar nombres de columnas para evitar errores por acentos o espacios
       colnames(data) <- iconv(colnames(data), from = "UTF-8", to = "ASCII//TRANSLIT")
 
       # Convertir todas las columnas de texto para evitar problemas de codificación
@@ -45,9 +45,6 @@ for (date in seq(start_date, end_date, by = "day")) {
       # Agregar la columna de fecha con formato seguro
       data$fecha_info <- as.character(format(date, "%Y-%m-%d"))
 
-      # Depuración: verificar tipos de datos antes de consolidar
-      print(str(data))
-
       # Consolidar datos usando bind_rows
       consolidated_data <- bind_rows(consolidated_data, data)
 
@@ -61,10 +58,14 @@ for (date in seq(start_date, end_date, by = "day")) {
   }
 }
 
-# Verificar el número total de registros consolidados
+# Verificar si se consolidaron registros
+if (nrow(consolidated_data) == 0) {
+  print("No se consolidaron registros. Verificar los archivos de origen.")
+} else {
+  # Guardar el consolidado en un archivo CSV con UTF-8
+  write.csv(consolidated_data, file.path(file_path, "Consolidado_Posiciones.csv"), row.names = FALSE, fileEncoding = "UTF-8")
+  print("Consolidado guardado exitosamente.")
+}
+
 print(paste("Total de registros consolidados:", nrow(consolidated_data)))
-
-# Guardar el consolidado en un archivo CSV con UTF-8
-write.csv(consolidated_data, file.path(file_path, "Consolidado_Posiciones.csv"), row.names = FALSE, fileEncoding = "UTF-8")
-
 print("Proceso completado exitosamente.")
