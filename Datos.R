@@ -1,55 +1,10 @@
-CREATE TABLE hist_posiciones (
-    id_key INTEGER PRIMARY KEY AUTOINCREMENT,
-    id_posicion INTEGER,
-    nombre_posicion TEXT,
-    tipo_de_posicion TEXT,
-    motivo_de_posicion TEXT,
-    codigo_motivo_de_posicion TEXT,
-    codigo_motivo_especifico TEXT,
-    presupuestada BOOLEAN,
-    status TEXT,
-    vacante BOOLEAN,
-    codigo_centro_de_costos INTEGER,
-    motivo_inactivacion TEXT,
-    codigo_motivo_inactivacion TEXT,
-    centro_de_costos TEXT,
-    division TEXT,
-    departamento TEXT,
-    regional TEXT,
-    plaza TEXT,
-    estado TEXT,
-    ubicacion TEXT,
-    municipio TEXT,
-    localidad TEXT,
-    nombre TEXT,
-    nombre_jefe TEXT,
-    fecha_creacion DATE,
-    fecha_inicio DATE,
-    fecha_vacante DATE,
-    area_de_personal_posicion TEXT,
-    dias_laborables_por_semana INTEGER,
-    effective_end_date DATE,
-    effective_start_date DATE,
-    id_colaborador INTEGER,
-    area_de_cobranza TEXT,
-    area_de_personal_puesto TEXT,
-    clasificacion_de_riesgo TEXT,
-    clasificacion_liderazgo TEXT,
-    descripcion TEXT,
-    fecha_fin_puesto DATE,
-    fecha_inicio_puesto DATE,
-    nombre_de_puesto TEXT,
-    perfil_profesional TEXT,
-    puesto_generico TEXT,
-    segmento_de_puesto TEXT,
-    tabulador_salarial TEXT,
-    tipo_reclutamiento TEXT,
-    pruebas_psicometricas TEXT,
-    codigo_centro_de_costos_superior INTEGER,
-    centro_de_costos_superior TEXT,
-    id_centro_de_costos INTEGER,
-    etiqueta_centro_de_costos TEXT,
-    codigo_plaza TEXT,
-    plaza_centro_de_costos TEXT,
-    nombre_centro_de_costos TEXT
-)
+
+## RUTA ARCHIVOS PROCESO
+C:\Users\racl26345\Documents\Proyecto Capacity\Posiciones_Hist
+
+## NOMBRE ARCHIVOS
+Posiciones_20240101
+
+## EXTENSIÓN ARCHIVOS
+(.xls)
+
