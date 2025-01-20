@@ -17,25 +17,31 @@ for (date in seq(start_date, end_date, by = "day")) {
 
   if (file.exists(file_full_path)) {
     tryCatch({
-      # Leer el archivo CSV con codificación UTF-8, omitir la primera fila (títulos) y manejar caracteres especiales
-      data <- read.csv(file_full_path, fileEncoding = "UTF-8", skip = 1, stringsAsFactors = FALSE)
+      # Leer archivo CSV con UTF-8 y omitir la primera fila
+      data <- read.csv(file_full_path, fileEncoding = "UTF-8", skip = 1, stringsAsFactors = FALSE, na.strings = c("", "NA"))
       
-      # Limpiar nombres de columnas eliminando acentos y caracteres especiales
-      names(data) <- iconv(names(data), from = "UTF-8", to = "ASCII//TRANSLIT")
+      # Limpiar nombres de columnas eliminando acentos
+      colnames(data) <- iconv(colnames(data), from = "UTF-8", to = "ASCII//TRANSLIT")
 
-      # Convertir los registros de texto para eliminar acentos
-      data[] <- lapply(data, function(x) if (is.character(x)) iconv(x, from = "UTF-8", to = "ASCII//TRANSLIT") else x)
+      # Convertir todas las columnas de texto para evitar errores de codificación
+      data[] <- lapply(data, function(x) {
+        if (is.character(x)) {
+          iconv(x, from = "UTF-8", to = "ASCII//TRANSLIT")
+        } else {
+          x
+        }
+      })
 
-      # Añadir columna de fecha del archivo
-      data$fecha_info <- as.character(date)
-      
-      # Consolidar los datos
+      # Agregar la columna de fecha con formato seguro
+      data$fecha_info <- as.character(format(date, "%Y-%m-%d"))
+
+      # Consolidar datos usando bind_rows
       consolidated_data <- bind_rows(consolidated_data, data)
 
       print(paste("Archivo procesado:", file_name, "- Filas:", nrow(data)))
 
     }, error = function(e) {
-      print(paste("Error al leer:", file_name, "-", e$message))
+      print(paste("Error al leer:", file_name, "-", conditionMessage(e)))
     })
   } else {
     print(paste("Archivo no encontrado:", file_name))
@@ -45,7 +51,8 @@ for (date in seq(start_date, end_date, by = "day")) {
 # Verificar el número total de registros consolidados
 print(paste("Total de registros consolidados:", nrow(consolidated_data)))
 
-# Guardar el consolidado en un nuevo archivo CSV
+# Guardar el consolidado en un archivo CSV con UTF-8
 write.csv(consolidated_data, file.path(file_path, "Consolidado_Posiciones.csv"), row.names = FALSE, fileEncoding = "UTF-8")
 
 print("Proceso completado exitosamente.")
+
