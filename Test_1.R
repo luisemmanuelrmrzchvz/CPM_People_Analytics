@@ -4,18 +4,18 @@ library(RSQLite)
 library(readr)
 
 # Leer el archivo CSV
-file_path <- "C:/Users/racl26345/Documentos/Reportes Automatizados/Inputs/db_incidencias.csv"
+file_path <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/db_incidencias.csv"
 df <- read_csv(file_path)
 
 # Convertir las fechas en formato serial de Excel a formato Date en R
-df$start_date <- as.Date(df$start_date, origin = "1899-12-30")  # Convertir start_date
-df$end_date <- as.Date(df$end_date, origin = "1899-12-30")      # Convertir end_date
+#df$start_date <- as.Date(df$start_date, origin = "1899-12-30")  # Convertir start_date
+#df$end_date <- as.Date(df$end_date, origin = "1899-12-30")      # Convertir end_date
 
 # Verificar las primeras filas de las fechas convertidas
-head(df$start_date)
+#head(df$start_date)
 
 # Conectarse a la base de datos SQLite (si no existe, se creará)
-db_path <- "C:/Users/racl26345/Documentos/Reportes Automatizados/Inputs/people_analytics.db"
+db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
 conn <- dbConnect(RSQLite::SQLite(), db_path)
 
 # Crear la tabla en SQLite (si no existe)
