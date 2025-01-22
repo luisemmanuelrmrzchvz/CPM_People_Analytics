@@ -9,14 +9,10 @@ ruta_carpeta <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/Posi
 fecha_inicio <- as.Date("2024-12-01")
 fecha_fin <- as.Date("2024-12-02")
 
-# Generar secuencia de fechas entre fecha_inicio y fecha_fin
-fechas <- seq(fecha_inicio, fecha_fin, by = "day")
+# Generar secuencia de fechas entre fecha_inicio y fecha_fin en formato YYYYMMDD
+formato_fechas <- format(seq(fecha_inicio, fecha_fin, by = "day"), "%Y%m%d")
 
-# Convertir fechas al formato YYYYMMDD donde el año es de 5 dígitos
-formato_fechas <- format(fechas, "%Y%m%d")
-formato_fechas <- sub("^2024", "22024", formato_fechas)  # Convertir a 5 dígitos el año
-
-# Crear lista para almacenar los data frames
+# Lista para almacenar los data frames
 lista_datos <- list()
 
 # Leer archivos dentro del rango de fechas
@@ -32,7 +28,7 @@ for (fecha in formato_fechas) {
     datos <- read_csv(ruta_archivo, col_names = FALSE)
     
     # Añadir la fecha del archivo como última columna
-    datos$Fecha_Archivo <- as.Date(sub("^22024", "2024", fecha), format = "%Y%m%d")
+    datos$Fecha_Archivo <- as.Date(fecha, format = "%Y%m%d")
 
     # Agregar a la lista
     lista_datos[[length(lista_datos) + 1]] <- datos
