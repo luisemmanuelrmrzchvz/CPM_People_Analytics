@@ -1,11 +1,11 @@
 library(dplyr)
 
 # Definir la ruta de los archivos
-file_path <- "C:/Users/racl26345/Documents/Proyecto Capacity/Posiciones_Hist"
+file_path <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/Posiciones_Hist/"
 
 # Definir rango de fechas
 start_date <- as.Date("2024-12-01")
-end_date <- as.Date("2024-12-10")
+end_date <- as.Date("2024-12-02")
 
 # Inicializar un dataframe vacío para almacenar los datos consolidados
 consolidated_data <- data.frame()

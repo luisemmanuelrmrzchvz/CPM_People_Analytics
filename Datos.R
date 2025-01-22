@@ -4,13 +4,13 @@ library(RSQLite)
 library(dplyr)
 
 # Definir la ruta de los archivos y la conexión a la base de datos
-file_path <- "C:/Users/racl26345/Documents/Proyecto Capacity/Posiciones_Hist"
+file_path <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/Posiciones_Hist"
 db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
 conn <- dbConnect(SQLite(), db_path)
 
 # Definir rango de fechas
 start_date <- as.Date("2024-12-01")
-end_date <- as.Date("2024-12-10")
+end_date <- as.Date("2024-12-02")
 
 # Inicializar un dataframe vacío para almacenar los datos consolidados
 consolidated_data <- data.frame()
