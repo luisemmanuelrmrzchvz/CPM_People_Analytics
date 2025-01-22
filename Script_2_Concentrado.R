@@ -1,4 +1,5 @@
-# Configuración de la ruta y rango de fechas
+# Cargar librerías necesarias
+library(readxl)
 library(dplyr)
 library(readr)
 
@@ -17,15 +18,15 @@ lista_datos <- list()
 
 # Leer archivos dentro del rango de fechas
 for (fecha in formato_fechas) {
-  nombre_archivo <- paste0("Posiciones_", fecha, ".csv")
+  nombre_archivo <- paste0("Posiciones_", fecha, ".xlsx")
   ruta_archivo <- file.path(ruta_carpeta, nombre_archivo)
 
   if (file.exists(ruta_archivo)) {
     mensaje <- paste("Cargando archivo:", nombre_archivo)
     print(mensaje)
     
-    # Leer el archivo CSV sin encabezado
-    datos <- read_csv(ruta_archivo, col_names = FALSE)
+    # Leer el archivo XLSX ignorando la primera fila (títulos de columnas)
+    datos <- read_excel(ruta_archivo, skip = 1, col_names = FALSE)
     
     # Añadir la fecha del archivo como última columna
     datos$Fecha_Archivo <- as.Date(fecha, format = "%Y%m%d")
@@ -42,9 +43,9 @@ for (fecha in formato_fechas) {
 if (length(lista_datos) > 0) {
   datos_consolidados <- bind_rows(lista_datos)
   
-  # Guardar el archivo consolidado en la misma carpeta
+  # Guardar el archivo consolidado en formato CSV en la misma carpeta
   archivo_salida <- file.path(ruta_carpeta, "Posiciones_Consolidado.csv")
-  write_csv(datos_consolidados, archivo_salida)
+  write_csv(datos_consolidados, archivo_salida, col_names = FALSE)
   
   print(paste("Archivo consolidado guardado en:", archivo_salida))
 } else {
