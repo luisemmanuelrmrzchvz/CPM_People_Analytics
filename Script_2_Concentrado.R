@@ -7,8 +7,8 @@ library(readr)
 ruta_carpeta <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/Posiciones_Hist"
 
 # Fechas de inicio y fin para la búsqueda de archivos
-fecha_inicio <- as.Date("2025-01-01")
-fecha_fin <- as.Date("2025-01-03")
+fecha_inicio <- as.Date("2024-12-01")
+fecha_fin <- as.Date("2024-12-02")
 
 # Generar secuencia de fechas entre fecha_inicio y fecha_fin en formato YYYYMMDD
 formato_fechas <- format(seq(fecha_inicio, fecha_fin, by = "day"), "%Y%m%d")
@@ -43,6 +43,14 @@ for (fecha in formato_fechas) {
 if (length(lista_datos) > 0) {
   datos_consolidados <- bind_rows(lista_datos)
   
+  # Definir las columnas a formatear como fechas (21, 22, 23, 25, 26, 32, 33, 46)
+  columnas_fecha <- c(21, 22, 23, 25, 26, 32, 33, 46)
+  
+  # Convertir las columnas seleccionadas a formato de fecha "YYYY-MM-DD"
+  for (col in columnas_fecha) {
+    datos_consolidados[[col]] <- as.Date(datos_consolidados[[col]], origin = "1899-12-30")
+  }
+
   # Guardar el archivo consolidado en formato CSV en la misma carpeta
   archivo_salida <- file.path(ruta_carpeta, "Posiciones_Consolidado.csv")
   write_csv(datos_consolidados, archivo_salida, col_names = FALSE)
