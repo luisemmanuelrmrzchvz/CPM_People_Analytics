@@ -7,8 +7,8 @@ library(readr)
 ruta_carpeta <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/Posiciones_Hist"
 
 # Fechas de inicio y fin para la búsqueda de archivos
-fecha_inicio <- as.Date("2024-12-01")
-fecha_fin <- as.Date("2024-12-02")
+fecha_inicio <- as.Date("2025-01-01")
+fecha_fin <- as.Date("2025-01-07")
 
 # Generar secuencia de fechas entre fecha_inicio y fecha_fin en formato YYYYMMDD
 formato_fechas <- format(seq(fecha_inicio, fecha_fin, by = "day"), "%Y%m%d")
