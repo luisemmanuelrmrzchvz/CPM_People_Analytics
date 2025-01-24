@@ -52,7 +52,7 @@ if (length(lista_datos) > 0) {
   
   # Convertir las columnas seleccionadas a formato de fecha "YYYY-MM-DD"
   for (col in columnas_fecha) {
-    datos_consolidados[[col]] <- as.Date(datos_consolidados[[col]], origin = "1899-12-30")
+    datos_consolidados[[col]] <- format(as.Date(datos_consolidados[[col]], origin = "1899-12-30"), "%Y-%m-%d")
   }
   
   # Conectar a la base de datos SQLite
