@@ -58,11 +58,12 @@ if (length(lista_datos) > 0) {
   # Conectar a la base de datos SQLite
   conn <- dbConnect(SQLite(), db_path)
   
-  # Renombrar las columnas para coincidir con la base de datos (ajustar si es necesario)
-  colnames(datos_consolidados) <- dbListFields(conn, "hist_posiciones")
+  # Obtener los nombres de las columnas de la base de datos (sin incluir id_key)
+  columnas_db <- dbListFields(conn, "hist_posiciones")
+  columnas_db <- columnas_db[columnas_db != "id_key"]
   
-  # Excluir la columna autoincremental id_key si existe
-  datos_consolidados <- datos_consolidados %>% select(-id_key)
+  # Renombrar las columnas para coincidir con la base de datos
+  colnames(datos_consolidados) <- columnas_db
   
   # Insertar los datos en la tabla hist_posiciones
   dbWriteTable(conn, "hist_posiciones", datos_consolidados, append = TRUE, row.names = FALSE)
