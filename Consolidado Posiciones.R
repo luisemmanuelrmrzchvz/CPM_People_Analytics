@@ -61,6 +61,9 @@ if (length(lista_datos) > 0) {
   # Renombrar las columnas para coincidir con la base de datos (ajustar si es necesario)
   colnames(datos_consolidados) <- dbListFields(conn, "hist_posiciones")
   
+  # Excluir la columna autoincremental id_key si existe
+  datos_consolidados <- datos_consolidados %>% select(-id_key)
+  
   # Insertar los datos en la tabla hist_posiciones
   dbWriteTable(conn, "hist_posiciones", datos_consolidados, append = TRUE, row.names = FALSE)
   
