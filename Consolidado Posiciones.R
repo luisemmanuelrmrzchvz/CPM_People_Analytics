@@ -1,71 +1,73 @@
+# Cargar librerías necesarias
+library(readxl)
 library(dplyr)
+library(DBI)
+library(RSQLite)
 
-# Definir la ruta de los archivos
-file_path <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/Posiciones_Hist/"
+# Ruta de la carpeta de entrada
+ruta_carpeta <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/Posiciones_Hist"
 
-# Definir rango de fechas
-start_date <- as.Date("2024-12-01")
-end_date <- as.Date("2024-12-02")
+# Ruta de la base de datos SQLite
+db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
 
-# Inicializar un dataframe vacío para almacenar los datos consolidados
-consolidated_data <- data.frame()
+# Fechas de inicio y fin para la búsqueda de archivos
+fecha_inicio <- as.Date("2025-01-01")
+fecha_fin <- as.Date("2025-01-07")
 
-# Recorrer fechas y procesar archivos
-for (date in seq(start_date, end_date, by = "day")) {
-  file_name <- paste0("Posiciones_", format(date, "%Y%m%d"), ".csv")
-  file_full_path <- file.path(file_path, file_name)
+# Generar secuencia de fechas entre fecha_inicio y fecha_fin en formato YYYYMMDD
+formato_fechas <- format(seq(fecha_inicio, fecha_fin, by = "day"), "%Y%m%d")
 
-  if (file.exists(file_full_path)) {
-    print(paste("Procesando archivo:", file_name))
-    tryCatch({
-      # Leer archivo CSV con UTF-8, detectando separador y revisando nombres de columnas
-      data <- read.csv(file_full_path, fileEncoding = "UTF-8", skip = 1, stringsAsFactors = FALSE, na.strings = c("", "NA"))
+# Lista para almacenar los data frames
+lista_datos <- list()
 
-      # Verificar contenido del archivo
-      if (nrow(data) == 0) {
-        stop(paste("El archivo", file_name, "está vacío o mal estructurado."))
-      }
+# Leer archivos dentro del rango de fechas
+for (fecha in formato_fechas) {
+  nombre_archivo <- paste0("Posiciones_", fecha, ".xlsx")
+  ruta_archivo <- file.path(ruta_carpeta, nombre_archivo)
 
-      # Mostrar columnas y filas cargadas para depuración
-      print(paste("Columnas detectadas en", file_name, ":", paste(colnames(data), collapse = ", ")))
-      print(paste("Número de filas:", nrow(data)))
+  if (file.exists(ruta_archivo)) {
+    mensaje <- paste("Cargando archivo:", nombre_archivo)
+    print(mensaje)
+    
+    # Leer el archivo XLSX ignorando la primera fila (títulos de columnas)
+    datos <- read_excel(ruta_archivo, skip = 1, col_names = FALSE)
+    
+    # Añadir la fecha del archivo como última columna
+    datos$Fecha_Archivo <- as.Date(fecha, format = "%Y%m%d")
 
-      # Normalizar nombres de columnas para evitar errores por acentos o espacios
-      colnames(data) <- iconv(colnames(data), from = "UTF-8", to = "ASCII//TRANSLIT")
-
-      # Convertir todas las columnas de texto para evitar problemas de codificación
-      data[] <- lapply(data, function(x) {
-        if (is.character(x)) {
-          iconv(x, from = "UTF-8", to = "ASCII//TRANSLIT")
-        } else {
-          x
-        }
-      })
-
-      # Agregar la columna de fecha con formato seguro
-      data$fecha_info <- as.character(format(date, "%Y-%m-%d"))
-
-      # Consolidar datos usando bind_rows
-      consolidated_data <- bind_rows(consolidated_data, data)
-
-      print(paste("Archivo procesado correctamente:", file_name, "- Filas agregadas:", nrow(data)))
-
-    }, error = function(e) {
-      print(paste("Error al procesar archivo:", file_name, "-", conditionMessage(e)))
-    })
+    # Agregar a la lista
+    lista_datos[[length(lista_datos) + 1]] <- datos
   } else {
-    print(paste("Archivo no encontrado:", file_name))
+    mensaje <- paste("Archivo no encontrado:", nombre_archivo)
+    print(mensaje)
   }
 }
 
-# Verificar si se consolidaron registros
-if (nrow(consolidated_data) == 0) {
-  print("No se consolidaron registros. Verificar los archivos de origen.")
+# Concatenar todos los data frames en uno solo
+if (length(lista_datos) > 0) {
+  datos_consolidados <- bind_rows(lista_datos)
+  
+  # Definir las columnas a formatear como fechas (21, 22, 23, 25, 26, 32, 33, 46)
+  columnas_fecha <- c(21, 22, 23, 25, 26, 32, 33, 46)
+  
+  # Convertir las columnas seleccionadas a formato de fecha "YYYY-MM-DD"
+  for (col in columnas_fecha) {
+    datos_consolidados[[col]] <- as.Date(datos_consolidados[[col]], origin = "1899-12-30")
+  }
+  
+  # Conectar a la base de datos SQLite
+  conn <- dbConnect(SQLite(), db_path)
+  
+  # Renombrar las columnas para coincidir con la base de datos (ajustar si es necesario)
+  colnames(datos_consolidados) <- dbListFields(conn, "hist_posiciones")
+  
+  # Insertar los datos en la tabla hist_posiciones
+  dbWriteTable(conn, "hist_posiciones", datos_consolidados, append = TRUE, row.names = FALSE)
+  
+  # Cerrar la conexión
+  dbDisconnect(conn)
+  
+  print("Datos consolidados insertados en la base de datos correctamente.")
 } else {
-  # Guardar el consolidado en un archivo CSV con UTF-8
-  write.csv(consolidated_data, file.path(file_path, "Consolidado_Posiciones.csv"), row.names = FALSE, fileEncoding = "UTF-8")
-  print("Consolidado guardado exitosamente.")
+  print("No se encontraron archivos en el rango de fechas especificado.")
 }
-
-print(paste("Total de registros consolidados:", nrow(consolidated_data)))
-print("Proceso completado exitosamente.")
