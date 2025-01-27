@@ -17,22 +17,31 @@ fecha_fin <- as.Date("2025-01-23")
 # Leer el archivo Excel, omitiendo la primera fila de títulos
 datos <- read_excel(ruta_archivo, skip = 1, col_names = FALSE)
 
-# Revisar los primeros valores de la columna 17 para entender su estructura
+# Revisar los primeros valores de la columna 17 (fecha_aprobacion) para entender su estructura
 cat("Primeros valores de la columna 17 antes de la conversión:\n")
 head(datos[[17]])
 
-# Asegurarse de que la columna 17 esté en formato POSIXct (fecha y hora)
+# Asegurarse de que la columna 17 (fecha_aprobacion) esté en formato POSIXct (fecha y hora)
 datos[[17]] <- as.POSIXct(datos[[17]], format = "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
 
-# Verificar los resultados después de la conversión
-cat("Número de valores NA en columna 17 (fecha_aprobacion):", sum(is.na(datos[[17]])), "\n")
-cat("Primeros valores de la columna 17 después de la conversión:\n")
-head(datos[[17]])
+# Convertir la columna 6 (fecha_solicitud) a formato POSIXct (fecha y hora)
+datos[[6]] <- as.POSIXct(datos[[6]], format = "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
 
-# Filtrar los registros en el rango de fechas de la columna 17 (fecha_aprobacion)
+# Convertir las columnas a solo fecha (sin hora)
+datos$fecha_aprobacion <- as.Date(datos[[17]])  # Convertir la columna 17 a solo fecha
+datos$fecha_solicitud <- as.Date(datos[[6]])    # Convertir la columna 6 a solo fecha
+
+# Verificar los resultados después de la conversión
+cat("Número de valores NA en columna 17 (fecha_aprobacion):", sum(is.na(datos$fecha_aprobacion)), "\n")
+cat("Número de valores NA en columna 6 (fecha_solicitud):", sum(is.na(datos$fecha_solicitud)), "\n")
+cat("Primeros valores de la columna 17 después de la conversión:\n")
+head(datos$fecha_aprobacion)
+cat("Primeros valores de la columna 6 después de la conversión:\n")
+head(datos$fecha_solicitud)
+
+# Filtrar los registros en el rango de fechas de las columnas fecha_aprobacion y fecha_solicitud
 datos_filtrados <- datos %>%
-  mutate(fecha_aprobacion = as.Date(datos[[17]])) %>%  # Convertir la columna a solo fecha (sin hora)
-  filter(!is.na(fecha_aprobacion)) %>%  # Filtrar solo si la columna fecha_aprobacion no tiene NA
+  filter(!is.na(fecha_aprobacion) & !is.na(fecha_solicitud)) %>%  # Filtrar registros válidos
   filter(fecha_aprobacion >= fecha_inicio & fecha_aprobacion <= fecha_fin)  # Filtrar por rango de fechas
 
 # Verificar las dimensiones después del filtrado
