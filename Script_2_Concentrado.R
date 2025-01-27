@@ -24,17 +24,17 @@ if (is.numeric(datos[[6]])) {
   datos[[6]] <- as.Date(datos[[6]], format = "%d/%m/%Y")  # Conversión desde texto
 }
 
-# Verificar la columna 17 (fecha_aprobacion) y convertirla
-# Si la columna tiene valores numéricos (formato Excel), convertir a fecha
+# Convertir la columna 17 (fecha_aprobacion) desde número (timestamp de Excel) a fecha "YYYY-MM-DD"
 if (is.numeric(datos[[17]])) {
-  datos[[17]] <- as.Date(datos[[17]], origin = "1899-12-30")  # Conversión desde formato numérico
+  # Convertir el número de timestamp de Excel a fecha
+  datos[[17]] <- as.Date(datos[[17]], origin = "1899-12-30")  # Conversión de timestamp a fecha
 } else {
-  # Si la columna contiene texto con formato tipo "10/01/2025 01:27:25 p.m.", extraemos solo la fecha
-  datos[[17]] <- substr(datos[[17]], 1, 10)  # Extraemos solo la fecha (primeros 10 caracteres)
-  
-  # Convertir la fecha extraída a formato Date
-  datos[[17]] <- as.Date(datos[[17]], format = "%d/%m/%Y")
+  # Si la columna no es numérica, verificar y convertir
+  datos[[17]] <- as.Date(substr(datos[[17]], 1, 10), format = "%d/%m/%Y")
 }
+
+# Asegurarse de que la columna 17 tenga solo la fecha (sin la hora)
+datos[[17]] <- as.Date(datos[[17]])  # Garantizar que se guarde solo la parte de la fecha
 
 # Verificar dimensiones de las columnas antes de continuar
 cat("Dimensión de la columna 6:", length(datos[[6]]), "\n")
