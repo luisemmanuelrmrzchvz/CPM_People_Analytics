@@ -18,17 +18,11 @@ fecha_fin <- as.Date("2025-01-23")
 datos <- read_excel(ruta_archivo, skip = 1, col_names = FALSE)
 
 # Revisar los primeros valores de la columna 17 para entender su estructura
+cat("Primeros valores de la columna 17 antes de la conversión:\n")
 head(datos[[17]])
 
-# Asegurarse de que la columna 17 esté en formato numérico (si es timestamp)
-if (is.numeric(datos[[17]])) {
-  # Comprobar si la columna es un número de timestamp de Excel
-  # Convertir el número de timestamp de Excel a fecha y hora
-  datos[[17]] <- as.POSIXct(datos[[17]], origin = "1899-12-30", tz = "UTC")
-} else {
-  # Si la columna contiene texto, intentamos extraer las fechas de la cadena
-  datos[[17]] <- as.Date(substr(datos[[17]], 1, 10), format = "%d/%m/%Y")
-}
+# Asegurarse de que la columna 17 esté en formato POSIXct (fecha y hora)
+datos[[17]] <- as.POSIXct(datos[[17]], format = "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
 
 # Verificar los resultados después de la conversión
 cat("Número de valores NA en columna 17 (fecha_aprobacion):", sum(is.na(datos[[17]])), "\n")
@@ -37,7 +31,7 @@ head(datos[[17]])
 
 # Filtrar los registros en el rango de fechas de la columna 17 (fecha_aprobacion)
 datos_filtrados <- datos %>%
-  mutate(fecha_aprobacion = as.Date(datos[[17]])) %>%  # Asegurarse que la fecha esté en formato Date
+  mutate(fecha_aprobacion = as.Date(datos[[17]])) %>%  # Convertir la columna a solo fecha (sin hora)
   filter(!is.na(fecha_aprobacion)) %>%  # Filtrar solo si la columna fecha_aprobacion no tiene NA
   filter(fecha_aprobacion >= fecha_inicio & fecha_aprobacion <= fecha_fin)  # Filtrar por rango de fechas
 
@@ -53,6 +47,10 @@ columnas_db <- columnas_db[columnas_db != "id_key"]
 
 # Renombrar las columnas del data frame para coincidir con la base de datos
 colnames(datos_filtrados) <- columnas_db
+
+# Verificar que las columnas coincidan
+cat("Nombres de columnas en los datos filtrados:\n")
+print(colnames(datos_filtrados))
 
 # Insertar los datos filtrados en la tabla sanciones
 dbWriteTable(conn, "sanciones", datos_filtrados, append = TRUE, row.names = FALSE)
