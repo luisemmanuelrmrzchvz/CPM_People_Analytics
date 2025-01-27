@@ -45,13 +45,23 @@ print("Proceso completado exitosamente.")
 
 
 ########################################
-CREATE TABLE incidencias (
+CREATE TABLE sanciones (
   id_key INTEGER PRIMARY KEY AUTOINCREMENT,
   id_colaborador INTEGER,
-  fecha_inicio DATE,
-  fecha_fin DATE,
-  incidencia TEXT,
-  dias_fuera INTEGER,
-  folio TEXT,
+  nombre TEXT,
+  antiguedad_meses REAL,
+  antiguedad_years REAL,
+  id_sancion INTEGER,
+  fecha_solicitud DATE,
+  clasificacion_sancion TEXT,
+  motivo_sancion TEXT,
+  detalle_sancion TEXT,
+  descripcion_breve TEXT,
+  acta_hechos BOOLEAN,
+  causa_sancion TEXT,
+  solicitado_por TEXT,
+  analista_rl TEXT,
+  tipo_sancion TEXT,
+  dias_suspension INTEGER,
   fecha_aprobacion DATE
 );
