@@ -85,6 +85,9 @@ New names:
 • `` -> `...16`
 • `` -> `...17`
 > 
+  > # Asignar nombres únicos a las columnas para evitar duplicados
+  > colnames(datos) <- make.names(colnames(datos), unique = TRUE)
+> 
   > # Asegurarse de que la columna 17 (fecha_aprobacion) esté en formato POSIXct (fecha y hora)
   > datos[[17]] <- as.POSIXct(datos[[17]], format = "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
 > 
