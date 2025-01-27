@@ -49,9 +49,24 @@ print("Proceso completado exitosamente.")
 
 > # Cargar librerías necesarias
   > library(readxl)
+Aviso:
+  package ‘readxl’ was built under R version 4.4.2 
 > library(dplyr)
+
+Adjuntando el paquete: ‘dplyr’
+
+The following objects are masked from ‘package:stats’:
+  
+  filter, lag
+
+The following objects are masked from ‘package:base’:
+  
+  intersect, setdiff, setequal, union
+
 > library(DBI)
 > library(RSQLite)
+Aviso:
+  package ‘RSQLite’ was built under R version 4.4.2 
 > 
   > # Ruta del archivo de entrada
   > ruta_archivo <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/Sanciones.xlsx"
@@ -84,66 +99,38 @@ New names:
 • `` -> `...16`
 • `` -> `...17`
 > 
-  > # Verificar los nombres de las columnas y corregir si hay duplicados
-  > colnames(datos)
-[1] "...1"  "...2"  "...3"  "...4"  "...5"  "...6"  "...7"  "...8"  "...9"  "...10" "...11" "...12" "...13" "...14" "...15" "...16" "...17"
-> colnames(datos) <- make.names(colnames(datos), unique = TRUE)
+  > # Asignar nombres únicos a las columnas automáticamente
+  > colnames(datos) <- make.names(paste0("Col", seq_along(datos)), unique = TRUE)
 > 
-  > # Asegurarse de que la columna 17 (fecha_aprobacion) esté en formato POSIXct (fecha y hora)
-  > datos[[17]] <- as.POSIXct(datos[[17]], format = "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
-> 
-  > # Convertir la columna 6 (fecha_solicitud) a formato POSIXct (fecha y hora)
-  > datos[[6]] <- as.POSIXct(datos[[6]], format = "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
-> 
-  > # Convertir las columnas a solo fecha (sin hora) y asignarlas a las columnas correctas
-  > datos$fecha_aprobacion <- as.Date(datos[[17]])  # Convertir la columna 17 a solo fecha
-> datos$fecha_solicitud <- as.Date(datos[[6]])    # Convertir la columna 6 a solo fecha
-> 
-  > # Eliminar las columnas adicionales que fueron generadas en el proceso de conversión
+  > # Renombrar las columnas relevantes (columna 17 y 6) para identificar fechas correctamente
   > datos <- datos %>%
-  +   select(-c(17, 6))  # Eliminar las columnas originales que no son necesarias
+  +   rename(fecha_aprobacion = Col17, fecha_solicitud = Col6)
 > 
-  > # Reordenar las columnas para restaurar el orden original
-  > # Vamos a reinsertar las columnas de fecha en las posiciones correctas
-  > colnames(datos)[colnames(datos) == "fecha_solicitud"] <- colnames(datos)[6]  # Restablecer fecha_solicitud en su lugar
-> colnames(datos)[colnames(datos) == "fecha_aprobacion"] <- colnames(datos)[17]  # Restablecer fecha_aprobacion en su lugar
+  > # Convertir las columnas de fecha en formato POSIXct (fecha y hora) y luego a Date (solo fecha)
+  > datos <- datos %>%
+  +   mutate(
+    +     fecha_aprobacion = as.Date(as.POSIXct(fecha_aprobacion, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")),
+    +     fecha_solicitud = as.Date(as.POSIXct(fecha_solicitud, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"))
+    +   )
 > 
-  > # Filtrar los registros en el rango de fechas de las columnas fecha_aprobacion y fecha_solicitud
+  > # Filtrar los registros en el rango de fechas
   > datos_filtrados <- datos %>%
-  +   filter(!is.na(fecha_aprobacion) & !is.na(fecha_solicitud)) %>%  # Filtrar registros válidos
-  +   filter(fecha_aprobacion >= fecha_inicio & fecha_aprobacion <= fecha_fin)  # Filtrar por rango de fechas
-Error in `filter()`:
-  ! Can't transform a data frame with duplicate names.
-Run `rlang::last_trace()` to see where the error occurred.
-> rlang::last_trace()
-<error/rlang_error>
-Error in `filter()`:
-! Can't transform a data frame with duplicate names.
----
-  Backtrace:
-  ▆
-1. ├─... %>% ...
-2. ├─dplyr::filter(...)
-3. ├─dplyr::filter(., !is.na(fecha_aprobacion) & !is.na(fecha_solicitud))
-4. └─dplyr:::filter.data.frame(., !is.na(fecha_aprobacion) & !is.na(fecha_solicitud))
-Run rlang::last_trace(drop = FALSE) to see 4 hidden frames.
-Aviso: unable to access index for repository https://cran.rstudio.com/src/contrib:
-  no fue posible abrir la URL 'https://cran.rstudio.com/src/contrib/PACKAGES'
-> rlang::last_trace(drop = FALSE)
-<error/rlang_error>
-  Error in `filter()`:
-  ! Can't transform a data frame with duplicate names.
----
-Backtrace:
-    ▆
- 1. ├─... %>% ...
- 2. ├─dplyr::filter(...)
- 3. ├─dplyr::filter(., !is.na(fecha_aprobacion) & !is.na(fecha_solicitud))
- 4. └─dplyr:::filter.data.frame(., !is.na(fecha_aprobacion) & !is.na(fecha_solicitud))
- 5.   └─dplyr:::filter_rows(.data, dots, by)
- 6.     └─DataMask$new(data, by, "filter", error_call = error_call)
- 7.       └─dplyr (local) initialize(...)
- 8.         └─rlang::abort(...)
+  +   filter(!is.na(fecha_aprobacion) & !is.na(fecha_solicitud)) %>%
+  +   filter(fecha_aprobacion >= fecha_inicio & fecha_aprobacion <= fecha_fin)
+> 
+  > # Establecer conexión con la base de datos SQLite
+  > con <- dbConnect(SQLite(), dbname = db_path)
+> 
+  > # Crear la tabla en SQLite si no existe
+  > tabla_sqlite <- "sanciones"  # Nombre de la tabla en SQLite
+> if (!dbExistsTable(con, tabla_sqlite)) {
+  +   dbCreateTable(con, tabla_sqlite, datos_filtrados)
+  + }
+> 
+  > # Insertar los datos filtrados en la tabla de SQLite
+  > dbWriteTable(con, tabla_sqlite, datos_filtrados, append = TRUE, row.names = FALSE)
+Error: Columns `Col1`, `Col2`, `Col3`, `Col4`, `Col5`, `Col7`, `Col8`, `Col9`, `Col10`, `Col11`, `Col12`, `Col13`, `Col14`, `Col15`, `Col16` not found
+> View(datos_filtrados)
 
 
 ########################
