@@ -1,4 +1,4 @@
-# Cargar librerías necesarias
+# Cargar librerías necesarias 
 library(readxl)
 library(dplyr)
 library(DBI)
@@ -36,35 +36,49 @@ datos_filtrados <- datos %>%
   filter(!is.na(fecha_aprobacion) & !is.na(fecha_solicitud)) %>%
   filter(fecha_aprobacion >= fecha_inicio & fecha_aprobacion <= fecha_fin)
 
+# Seleccionar y renombrar columnas para que coincidan con la estructura de la tabla SQLite
+datos_filtrados <- datos_filtrados %>%
+  mutate(
+    id_colaborador = as.integer(Col1), 
+    nombre = as.character(Col2),
+    antiguedad_meses = as.numeric(Col3),
+    antiguedad_years = as.numeric(Col4),
+    id_sancion = as.integer(Col5),
+    clasificacion_sancion = as.character(Col7),
+    motivo_sancion = as.character(Col8),
+    detalle_sancion = as.character(Col9),
+    descripcion_breve = as.character(Col10),
+    acta_hechos = as.logical(Col11),
+    causa_sancion = as.character(Col12),
+    solicitado_por = as.character(Col13),
+    analista_rl = as.character(Col14),
+    tipo_sancion = as.character(Col15),
+    dias_suspension = as.integer(Col16)
+  ) %>%
+  select(
+    id_colaborador, nombre, antiguedad_meses, antiguedad_years, id_sancion, 
+    fecha_solicitud, clasificacion_sancion, motivo_sancion, detalle_sancion, 
+    descripcion_breve, acta_hechos, causa_sancion, solicitado_por, analista_rl, 
+    tipo_sancion, dias_suspension, fecha_aprobacion
+  )
+
 # Establecer conexión con la base de datos SQLite
 con <- dbConnect(SQLite(), dbname = db_path)
 
-# Crear la tabla en SQLite si no existe
-tabla_sqlite <- "sanciones"  # Nombre de la tabla en SQLite
-if (!dbExistsTable(con, tabla_sqlite)) {
-  dbCreateTable(con, tabla_sqlite, datos_filtrados)
-}
-
-# Verificar y respaldar en la base de datos SQLite
+# Insertar los datos en la tabla existente
 tryCatch(
   {
-    # Intentar insertar los datos directamente
-    dbWriteTable(con, tabla_sqlite, datos_filtrados, append = TRUE, row.names = FALSE)
-    cat("Datos respaldados exitosamente en la tabla", tabla_sqlite, "\n")
+    dbWriteTable(con, "sanciones", datos_filtrados, append = TRUE, row.names = FALSE)
+    cat("Datos respaldados exitosamente en la tabla 'sanciones'.\n")
   },
   error = function(e) {
     cat("Error al insertar los datos: ", e$message, "\n")
-    
-    # Forzar la coincidencia de columnas con SQLite y reintentar
-    dbExecute(con, paste0("DELETE FROM ", tabla_sqlite))  # Limpiar la tabla (opcional)
-    dbWriteTable(con, tabla_sqlite, datos_filtrados, append = TRUE, row.names = FALSE)
-    cat("Datos respaldados después de ajustar el formato.\n")
   }
 )
 
 # Confirmar los registros insertados
-registros <- dbReadTable(con, tabla_sqlite)
-print(paste("Total de registros en la tabla:", nrow(registros)))
+total_registros <- dbGetQuery(con, "SELECT COUNT(*) as total FROM sanciones")
+cat("Total de registros en la tabla 'sanciones':", total_registros$total, "\n")
 
 # Cerrar conexión con SQLite
 dbDisconnect(con)
