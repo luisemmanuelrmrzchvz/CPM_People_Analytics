@@ -17,37 +17,23 @@ fecha_fin <- as.Date("2025-01-23")
 # Leer el archivo Excel, omitiendo la primera fila de títulos
 datos <- read_excel(ruta_archivo, skip = 1, col_names = FALSE)
 
-# Convertir la columna 6 (fecha_solicitud) a formato de fecha "YYYY-MM-DD"
-if (is.numeric(datos[[6]])) {
-  datos[[6]] <- as.Date(datos[[6]], origin = "1899-12-30")  # Conversión desde el formato numérico de Excel
-} else {
-  datos[[6]] <- as.Date(datos[[6]], format = "%d/%m/%Y")  # Conversión desde texto
-}
-
+# Asegurarse de que la columna 17 esté en formato numérico (si es timestamp)
 # Convertir la columna 17 (fecha_aprobacion) desde número (timestamp de Excel) a fecha "YYYY-MM-DD"
 if (is.numeric(datos[[17]])) {
   # Convertir el número de timestamp de Excel a fecha
   datos[[17]] <- as.Date(datos[[17]], origin = "1899-12-30")  # Conversión de timestamp a fecha
 } else {
-  # Si la columna no es numérica, verificar y convertir
+  # Si la columna no es numérica, se extrae la fecha de la cadena de texto
   datos[[17]] <- as.Date(substr(datos[[17]], 1, 10), format = "%d/%m/%Y")
 }
 
-# Asegurarse de que la columna 17 tenga solo la fecha (sin la hora)
-datos[[17]] <- as.Date(datos[[17]])  # Garantizar que se guarde solo la parte de la fecha
-
-# Verificar dimensiones de las columnas antes de continuar
-cat("Dimensión de la columna 6:", length(datos[[6]]), "\n")
-cat("Dimensión de la columna 17:", length(datos[[17]]), "\n")
-
-# Comprobar si hay valores NA en las columnas de fecha
-cat("Número de valores NA en columna 6 (fecha_solicitud):", sum(is.na(datos[[6]])), "\n")
+# Verificar que la conversión a fecha fue exitosa
 cat("Número de valores NA en columna 17 (fecha_aprobacion):", sum(is.na(datos[[17]])), "\n")
 
-# Filtrar solo los registros de la columna 17 (fecha_aprobacion) en el rango de fechas
+# Filtrar los registros en el rango de fechas de la columna 17 (fecha_aprobacion)
 datos_filtrados <- datos %>%
   filter(!is.na(datos[[17]])) %>%  # Filtrar solo si la columna 17 no tiene NA
-  filter(datos[[17]] >= fecha_inicio & datos[[17]] <= fecha_fin)
+  filter(datos[[17]] >= fecha_inicio & datos[[17]] <= fecha_fin)  # Filtrar por rango de fechas
 
 # Verificar las dimensiones después del filtrado
 cat("Dimensión después del filtrado:", nrow(datos_filtrados), "\n")
