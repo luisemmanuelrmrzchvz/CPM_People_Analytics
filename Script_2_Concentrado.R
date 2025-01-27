@@ -25,21 +25,22 @@ if (is.numeric(datos[[6]])) {
 }
 
 # Convertir la columna 17 (fecha_aprobacion) a formato de fecha "YYYY-MM-DD" extrayendo solo la fecha
+# Primero convertimos la columna 17 de timestamp a solo fecha (ignorando la hora)
 if (is.numeric(datos[[17]])) {
-  # Si la columna es numérica (timestamp), convertirla a fecha
-  datos[[17]] <- as.Date(datos[[17]], origin = "1899-12-30")
+  datos[[17]] <- as.Date(datos[[17]], origin = "1899-12-30")  # Si es numérica (timestamp)
 } else {
-  # Si la columna es texto, extraer solo la fecha (ignorando la hora)
+  # Si es texto, extraemos solo la parte de la fecha
   datos[[17]] <- as.Date(substr(datos[[17]], 1, 10), format = "%d/%m/%Y")
 }
 
+# Asegurarse de que las columnas 6 y 17 estén en formato "YYYY-MM-DD"
+datos[[6]] <- format(datos[[6]], "%Y-%m-%d")
+datos[[17]] <- format(datos[[17]], "%Y-%m-%d")
+
 # Filtrar registros que estén dentro del rango de fechas definido
 datos_filtrados <- datos %>%
-  filter(datos[[6]] >= fecha_inicio & datos[[6]] <= fecha_fin)
-
-# Verificar que las columnas 6 y 17 ahora estén en formato correcto antes de guardar
-datos_filtrados[[6]] <- format(datos_filtrados[[6]], "%Y-%m-%d")
-datos_filtrados[[17]] <- format(datos_filtrados[[17]], "%Y-%m-%d")
+  filter(datos[[6]] >= fecha_inicio & datos[[6]] <= fecha_fin) %>%
+  filter(datos[[17]] >= fecha_inicio & datos[[17]] <= fecha_fin)
 
 # Conectar a la base de datos SQLite
 conn <- dbConnect(SQLite(), db_path)
