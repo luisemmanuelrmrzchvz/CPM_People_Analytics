@@ -47,6 +47,14 @@ datos_filtrados <- datos %>%
 # Verificar las dimensiones después del filtrado
 cat("Dimensión después del filtrado:", nrow(datos_filtrados), "\n")
 
+# Asegurarse de que las columnas de fecha sean de tipo Date antes de aplicar format
+datos_filtrados$fecha_solicitud <- as.Date(datos_filtrados$fecha_solicitud)
+datos_filtrados$fecha_aprobacion <- as.Date(datos_filtrados$fecha_aprobacion)
+
+# Convertir las fechas a texto en formato "YYYY-MM-DD"
+datos_filtrados$fecha_solicitud <- format(datos_filtrados$fecha_solicitud, "%Y-%m-%d")
+datos_filtrados$fecha_aprobacion <- format(datos_filtrados$fecha_aprobacion, "%Y-%m-%d")
+
 # Conectar a la base de datos SQLite
 conn <- dbConnect(SQLite(), db_path)
 
@@ -56,10 +64,6 @@ columnas_db <- columnas_db[columnas_db != "id_key"]
 
 # Renombrar las columnas del data frame para coincidir con la base de datos
 colnames(datos_filtrados) <- columnas_db
-
-# Convertir las fechas a texto en formato "YYYY-MM-DD"
-datos_filtrados$fecha_solicitud <- format(datos_filtrados$fecha_solicitud, "%Y-%m-%d")
-datos_filtrados$fecha_aprobacion <- format(datos_filtrados$fecha_aprobacion, "%Y-%m-%d")
 
 # Insertar los datos filtrados en la tabla sanciones
 dbWriteTable(conn, "sanciones", datos_filtrados, append = TRUE, row.names = FALSE)
