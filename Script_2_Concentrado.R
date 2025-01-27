@@ -24,10 +24,12 @@ if (is.numeric(datos[[6]])) {
   datos[[6]] <- as.Date(datos[[6]], format = "%d/%m/%Y")  # Conversión desde texto
 }
 
-# Convertir la columna 17 (fecha_aprobacion) a formato de fecha "YYYY-MM-DD"
+# Convertir la columna 17 (fecha_aprobacion) a formato de fecha "YYYY-MM-DD" extrayendo solo la fecha
 if (is.numeric(datos[[17]])) {
+  # Si la columna es numérica (timestamp), convertirla a fecha
   datos[[17]] <- as.Date(datos[[17]], origin = "1899-12-30")
 } else {
+  # Si la columna es texto, extraer solo la fecha (ignorando la hora)
   datos[[17]] <- as.Date(substr(datos[[17]], 1, 10), format = "%d/%m/%Y")
 }
 
