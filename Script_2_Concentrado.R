@@ -24,9 +24,10 @@ if (is.numeric(datos[[6]])) {
   datos[[6]] <- as.Date(datos[[6]], format = "%d/%m/%Y")  # Conversión desde texto
 }
 
-# Convertir la columna 17 (fecha_aprobacion) a formato de fecha "YYYY-MM-DD" extrayendo solo la fecha
+# Convertir la columna 17 (fecha_aprobacion) de timestamp a fecha "YYYY-MM-DD"
+# Si el valor de la columna es numérico (timestamp de Excel), convertirlo a fecha.
 if (is.numeric(datos[[17]])) {
-  datos[[17]] <- as.Date(datos[[17]], origin = "1899-12-30")  # Si es numérica (timestamp)
+  datos[[17]] <- as.Date(datos[[17]], origin = "1899-12-30")  # Conversión desde el formato numérico de Excel
 } else {
   # Si es texto, extraemos solo la parte de la fecha
   datos[[17]] <- as.Date(substr(datos[[17]], 1, 10), format = "%d/%m/%Y")
@@ -36,18 +37,16 @@ if (is.numeric(datos[[17]])) {
 cat("Dimensión de la columna 6:", length(datos[[6]]), "\n")
 cat("Dimensión de la columna 17:", length(datos[[17]]), "\n")
 
-# Asegurarse de que las columnas 6 y 17 estén en formato "YYYY-MM-DD"
-datos[[6]] <- format(datos[[6]], "%Y-%m-%d")
+# Asegurarse de que la columna 17 esté en formato "YYYY-MM-DD"
 datos[[17]] <- format(datos[[17]], "%Y-%m-%d")
 
 # Comprobar si hay valores NA en las columnas de fecha
 cat("Número de valores NA en columna 6 (fecha_solicitud):", sum(is.na(datos[[6]])), "\n")
 cat("Número de valores NA en columna 17 (fecha_aprobacion):", sum(is.na(datos[[17]])), "\n")
 
-# Filtrar registros que estén dentro del rango de fechas definido
+# Filtrar solo los registros de la columna 17 (fecha_aprobacion) en el rango de fechas
 datos_filtrados <- datos %>%
-  filter(!is.na(datos[[6]]) & !is.na(datos[[17]])) %>%  # Filtrar solo si las fechas no son NA
-  filter(datos[[6]] >= fecha_inicio & datos[[6]] <= fecha_fin) %>%
+  filter(!is.na(datos[[17]])) %>%  # Filtrar solo si la columna 17 no tiene NA
   filter(datos[[17]] >= fecha_inicio & datos[[17]] <= fecha_fin)
 
 # Verificar las dimensiones después del filtrado
@@ -70,18 +69,3 @@ dbWriteTable(conn, "sanciones", datos_filtrados, append = TRUE, row.names = FALS
 dbDisconnect(conn)
 
 print("Datos filtrados e insertados en la base de datos correctamente.")
-
-
-
-#################
-
-
-Error in `filter()`:
-  ℹ In argument: `datos[[6]] >= fecha_inicio & datos[[6]] <= fecha_fin`.
-Caused by error:
-  ! `..1` must be of size 0 or 1, not size 6412.
-Run `rlang::last_trace()` to see where the error occurred.
-
-
-10/01/2025  01:27:25 p. m.
-45667.5607060185
