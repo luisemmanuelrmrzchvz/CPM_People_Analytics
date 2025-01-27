@@ -70,3 +70,18 @@ dbWriteTable(conn, "sanciones", datos_filtrados, append = TRUE, row.names = FALS
 dbDisconnect(conn)
 
 print("Datos filtrados e insertados en la base de datos correctamente.")
+
+
+
+#################
+
+
+Error in `filter()`:
+  ℹ In argument: `datos[[6]] >= fecha_inicio & datos[[6]] <= fecha_fin`.
+Caused by error:
+  ! `..1` must be of size 0 or 1, not size 6412.
+Run `rlang::last_trace()` to see where the error occurred.
+
+
+10/01/2025  01:27:25 p. m.
+45667.5607060185
