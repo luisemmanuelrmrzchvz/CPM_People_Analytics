@@ -82,20 +82,13 @@ New names:
 • `` -> `...16`
 • `` -> `...17`
 > 
-  > # Revisar los primeros valores de la columna 17 (fecha_aprobacion) para entender su estructura
-  > cat("Primeros valores de la columna 17 antes de la conversión:\n")
-Primeros valores de la columna 17 antes de la conversión:
-  > head(datos[[17]])
-[1] "2025-01-10 13:27:25 UTC" "2025-01-21 18:59:09 UTC" "2024-10-23 16:46:51 UTC" "2024-09-10 19:48:27 UTC" "2024-10-24 14:10:09 UTC"
-[6] "2024-10-10 14:11:50 UTC"
-> 
   > # Asegurarse de que la columna 17 (fecha_aprobacion) esté en formato POSIXct (fecha y hora)
   > datos[[17]] <- as.POSIXct(datos[[17]], format = "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
 > 
   > # Convertir la columna 6 (fecha_solicitud) a formato POSIXct (fecha y hora)
   > datos[[6]] <- as.POSIXct(datos[[6]], format = "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
 > 
-  > # Convertir las columnas a solo fecha (sin hora)
+  > # Convertir las columnas a solo fecha (sin hora) y asignarlas a las columnas correctas
   > datos$fecha_aprobacion <- as.Date(datos[[17]])  # Convertir la columna 17 a solo fecha
 > datos$fecha_solicitud <- as.Date(datos[[6]])    # Convertir la columna 6 a solo fecha
 > 
@@ -112,6 +105,10 @@ Primeros valores de la columna 17 después de la conversión:
 Primeros valores de la columna 6 después de la conversión:
   > head(datos$fecha_solicitud)
 [1] "2025-01-04" "2025-01-07" "2024-10-09" "2024-09-07" "2024-10-23" "2024-10-02"
+> 
+  > # Eliminar las columnas adicionales que fueron generadas en el proceso de conversión
+  > datos <- datos %>%
+  +   select(-c(17, 6))  # Eliminar las columnas originales que no son necesarias
 > 
   > # Filtrar los registros en el rango de fechas de las columnas fecha_aprobacion y fecha_solicitud
   > datos_filtrados <- datos %>%
@@ -138,14 +135,16 @@ Nombres de columnas en los datos filtrados:
   > print(colnames(datos_filtrados))
 [1] "id_colaborador"        "nombre"                "antiguedad_meses"      "antiguedad_years"      "id_sancion"            "fecha_solicitud"      
 [7] "clasificacion_sancion" "motivo_sancion"        "detalle_sancion"       "descripcion_breve"     "acta_hechos"           "causa_sancion"        
-[13] "solicitado_por"        "analista_rl"           "tipo_sancion"          "dias_suspension"       "fecha_aprobacion"      NA                     
-[19] NA                     
+[13] "solicitado_por"        "analista_rl"           "tipo_sancion"          "dias_suspension"       "fecha_aprobacion"     
 > 
   > # Insertar los datos filtrados en la tabla sanciones
   > dbWriteTable(conn, "sanciones", datos_filtrados, append = TRUE, row.names = FALSE)
-Error: Columns `NA` not found
-> View(datos)
-> View(datos_filtrados)
+> 
+  > # Cerrar la conexión a la base de datos
+  > dbDisconnect(conn)
+> 
+  > print("Datos filtrados e insertados en la base de datos correctamente.")
+[1] "Datos filtrados e insertados en la base de datos correctamente."
 
 ########################
 
