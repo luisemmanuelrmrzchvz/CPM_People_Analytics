@@ -53,7 +53,10 @@ datos_filtrados <- datos_filtrados %>%
     solicitado_por = as.character(Col13),
     analista_rl = as.character(Col14),
     tipo_sancion = as.character(Col15),
-    dias_suspension = as.integer(Col16)
+    dias_suspension = as.integer(Col16),
+    # Convertir las fechas a formato texto en YYYY-MM-DD
+    fecha_solicitud = format(fecha_solicitud, "%Y-%m-%d"),
+    fecha_aprobacion = format(fecha_aprobacion, "%Y-%m-%d")
   ) %>%
   select(
     id_colaborador, nombre, antiguedad_meses, antiguedad_years, id_sancion, 
