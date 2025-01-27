@@ -95,47 +95,34 @@ New names:
   > datos$fecha_aprobacion <- as.Date(datos[[17]])  # Convertir la columna 17 a solo fecha
 > datos$fecha_solicitud <- as.Date(datos[[6]])    # Convertir la columna 6 a solo fecha
 > 
-  > # Verificar los resultados después de la conversión
-  > cat("Número de valores NA en columna 17 (fecha_aprobacion):", sum(is.na(datos$fecha_aprobacion)), "\n")
-Número de valores NA en columna 17 (fecha_aprobacion): 0 
-> cat("Número de valores NA en columna 6 (fecha_solicitud):", sum(is.na(datos$fecha_solicitud)), "\n")
-Número de valores NA en columna 6 (fecha_solicitud): 0 
-> cat("Primeros valores de la columna 17 después de la conversión:\n")
-Primeros valores de la columna 17 después de la conversión:
-  > head(datos$fecha_aprobacion)
-[1] "2025-01-10" "2025-01-21" "2024-10-23" "2024-09-10" "2024-10-24" "2024-10-10"
-> cat("Primeros valores de la columna 6 después de la conversión:\n")
-Primeros valores de la columna 6 después de la conversión:
-  > head(datos$fecha_solicitud)
-[1] "2025-01-04" "2025-01-07" "2024-10-09" "2024-09-07" "2024-10-23" "2024-10-02"
-> 
   > # Eliminar las columnas adicionales que fueron generadas en el proceso de conversión
   > datos <- datos %>%
   +   select(-c(17, 6))  # Eliminar las columnas originales que no son necesarias
+> 
+  > # Reordenar las columnas para restaurar el orden original
+  > # Vamos a reinsertar las columnas de fecha en las posiciones correctas
+  > colnames(datos)[colnames(datos) == "fecha_solicitud"] <- colnames(datos)[6]  # Restablecer fecha_solicitud en su lugar
+> colnames(datos)[colnames(datos) == "fecha_aprobacion"] <- colnames(datos)[17]  # Restablecer fecha_aprobacion en su lugar
 > 
   > # Filtrar los registros en el rango de fechas de las columnas fecha_aprobacion y fecha_solicitud
   > datos_filtrados <- datos %>%
   +   filter(!is.na(fecha_aprobacion) & !is.na(fecha_solicitud)) %>%  # Filtrar registros válidos
   +   filter(fecha_aprobacion >= fecha_inicio & fecha_aprobacion <= fecha_fin)  # Filtrar por rango de fechas
-> 
-  > # Verificar las dimensiones después del filtrado
-  > cat("Dimensión después del filtrado:", nrow(datos_filtrados), "\n")
-Dimensión después del filtrado: 6403 
-> 
-  > # Conectar a la base de datos SQLite
-  > conn <- dbConnect(SQLite(), db_path)
-> 
-  > # Obtener los nombres de las columnas de la tabla SQLite (excluyendo id_key)
-  > columnas_db <- dbListFields(conn, "sanciones")
-> columnas_db <- columnas_db[columnas_db != "id_key"]
-> 
-  > # Renombrar las columnas del data frame para coincidir con la base de datos
-  > colnames(datos_filtrados) <- columnas_db
-> 
-  > # Convertir las fechas a texto en formato "YYYY-MM-DD"
-  > datos_filtrados$fecha_solicitud <- format(datos_filtrados$fecha_solicitud, "%Y-%m-%d")
-Error en format.default(datos_filtrados$fecha_solicitud, "%Y-%m-%d"): 
-  argumento 'trim' inválido
+Error in `filter()`:
+  ! Can't transform a data frame with duplicate names.
+Run `rlang::last_trace()` to see where the error occurred.
+> rlang::last_trace()
+<error/rlang_error>
+Error in `filter()`:
+! Can't transform a data frame with duplicate names.
+---
+  Backtrace:
+  ▆
+1. ├─... %>% ...
+2. ├─dplyr::filter(...)
+3. ├─dplyr::filter(., !is.na(fecha_aprobacion) & !is.na(fecha_solicitud))
+4. └─dplyr:::filter.data.frame(., !is.na(fecha_aprobacion) & !is.na(fecha_solicitud))
+Run rlang::last_trace(drop = FALSE) to see 4 hidden frames.
 
 ########################
 
