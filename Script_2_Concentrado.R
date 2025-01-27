@@ -48,3 +48,11 @@ dbWriteTable(conn, "sanciones", datos_filtrados, append = TRUE, row.names = FALS
 dbDisconnect(conn)
 
 print("Datos filtrados e insertados en la base de datos correctamente.")
+
+
+########
+Error in `filter()`:
+  ℹ In argument: `as.Date(...6) >= fecha_inicio & as.Date(...6) <= fecha_fin`.
+Caused by error in `charToDate()`:
+  ! la cadena de caracteres no está en un formato estándar inequívoco
+Run `rlang::last_trace()` to see where the error occurred.
