@@ -41,3 +41,17 @@ if (nrow(consolidated_data) > 0) {
 dbDisconnect(conn)
 
 print("Proceso completado exitosamente.")
+
+
+
+########################################
+CREATE TABLE incidencias (
+  id_key INTEGER PRIMARY KEY AUTOINCREMENT,
+  id_colaborador INTEGER,
+  fecha_inicio DATE,
+  fecha_fin DATE,
+  incidencia TEXT,
+  dias_fuera INTEGER,
+  folio TEXT,
+  fecha_aprobacion DATE
+);
