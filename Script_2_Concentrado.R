@@ -32,8 +32,9 @@ cat("Número de valores NA en columna 17 (fecha_aprobacion):", sum(is.na(datos[[
 
 # Filtrar los registros en el rango de fechas de la columna 17 (fecha_aprobacion)
 datos_filtrados <- datos %>%
-  filter(!is.na(datos[[17]])) %>%  # Filtrar solo si la columna 17 no tiene NA
-  filter(datos[[17]] >= fecha_inicio & datos[[17]] <= fecha_fin)  # Filtrar por rango de fechas
+  mutate(fecha_aprobacion = as.Date(datos[[17]], origin = "1899-12-30")) %>%  # Asegurarse que la fecha esté en formato Date
+  filter(!is.na(fecha_aprobacion)) %>%  # Filtrar solo si la columna fecha_aprobacion no tiene NA
+  filter(fecha_aprobacion >= fecha_inicio & fecha_aprobacion <= fecha_fin)  # Filtrar por rango de fechas
 
 # Verificar las dimensiones después del filtrado
 cat("Dimensión después del filtrado:", nrow(datos_filtrados), "\n")
