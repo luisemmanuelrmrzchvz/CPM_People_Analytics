@@ -45,6 +45,9 @@ print("Proceso completado exitosamente.")
 
 
 ########################################
+
+
+
 > # Cargar librerías necesarias
   > library(readxl)
 > library(dplyr)
@@ -129,22 +132,10 @@ Dimensión después del filtrado: 6403
   > # Renombrar las columnas del data frame para coincidir con la base de datos
   > colnames(datos_filtrados) <- columnas_db
 > 
-  > # Verificar que las columnas coincidan
-  > cat("Nombres de columnas en los datos filtrados:\n")
-Nombres de columnas en los datos filtrados:
-  > print(colnames(datos_filtrados))
-[1] "id_colaborador"        "nombre"                "antiguedad_meses"      "antiguedad_years"      "id_sancion"            "fecha_solicitud"      
-[7] "clasificacion_sancion" "motivo_sancion"        "detalle_sancion"       "descripcion_breve"     "acta_hechos"           "causa_sancion"        
-[13] "solicitado_por"        "analista_rl"           "tipo_sancion"          "dias_suspension"       "fecha_aprobacion"     
-> 
-  > # Insertar los datos filtrados en la tabla sanciones
-  > dbWriteTable(conn, "sanciones", datos_filtrados, append = TRUE, row.names = FALSE)
-> 
-  > # Cerrar la conexión a la base de datos
-  > dbDisconnect(conn)
-> 
-  > print("Datos filtrados e insertados en la base de datos correctamente.")
-[1] "Datos filtrados e insertados en la base de datos correctamente."
+  > # Convertir las fechas a texto en formato "YYYY-MM-DD"
+  > datos_filtrados$fecha_solicitud <- format(datos_filtrados$fecha_solicitud, "%Y-%m-%d")
+Error en format.default(datos_filtrados$fecha_solicitud, "%Y-%m-%d"): 
+  argumento 'trim' inválido
 
 ########################
 
