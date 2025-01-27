@@ -17,6 +17,9 @@ fecha_fin <- as.Date("2025-01-23")
 # Leer el archivo Excel, omitiendo la primera fila de títulos
 datos <- read_excel(ruta_archivo, skip = 1, col_names = FALSE)
 
+# Asignar nombres únicos a las columnas para evitar duplicados
+colnames(datos) <- make.names(colnames(datos), unique = TRUE)
+
 # Asegurarse de que la columna 17 (fecha_aprobacion) esté en formato POSIXct (fecha y hora)
 datos[[17]] <- as.POSIXct(datos[[17]], format = "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
 
