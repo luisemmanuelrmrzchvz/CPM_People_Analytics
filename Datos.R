@@ -82,43 +82,45 @@ New names:
 • `` -> `...16`
 • `` -> `...17`
 > 
-  > # Convertir la columna 6 (fecha_solicitud) a formato de fecha "YYYY-MM-DD"
-  > if (is.numeric(datos[[6]])) {
-    +   datos[[6]] <- as.Date(datos[[6]], origin = "1899-12-30")  # Conversión desde el formato numérico de Excel
-    + } else {
-      +   datos[[6]] <- as.Date(datos[[6]], format = "%d/%m/%Y")  # Conversión desde texto
-      + }
-> 
-  > # Convertir la columna 17 (fecha_aprobacion) de timestamp a fecha "YYYY-MM-DD"
-  > # Si el valor de la columna es numérico (timestamp de Excel), convertirlo a fecha.
+  > # Asegurarse de que la columna 17 esté en formato numérico (si es timestamp)
+  > # Convertir la columna 17 (fecha_aprobacion) desde número (timestamp de Excel) a fecha "YYYY-MM-DD"
   > if (is.numeric(datos[[17]])) {
-    +   datos[[17]] <- as.Date(datos[[17]], origin = "1899-12-30")  # Conversión desde el formato numérico de Excel
-    + } else {
-      +   # Si es texto, extraemos solo la parte de la fecha
-        +   datos[[17]] <- as.Date(substr(datos[[17]], 1, 10), format = "%d/%m/%Y")
-        + }
+    +   # Convertir el número de timestamp de Excel a fecha
+      +   datos[[17]] <- as.Date(datos[[17]], origin = "1899-12-30")  # Conversión de timestamp a fecha
+      + } else {
+        +   # Si la columna no es numérica, se extrae la fecha de la cadena de texto
+          +   datos[[17]] <- as.Date(substr(datos[[17]], 1, 10), format = "%d/%m/%Y")
+          + }
 > 
-  > # Verificar dimensiones de las columnas antes de continuar
-  > cat("Dimensión de la columna 6:", length(datos[[6]]), "\n")
-Dimensión de la columna 6: 6412 
-> cat("Dimensión de la columna 17:", length(datos[[17]]), "\n")
-Dimensión de la columna 17: 6412 
-> 
-  > # Asegurarse de que la columna 17 esté en formato "YYYY-MM-DD"
-  > datos[[17]] <- format(datos[[17]], "%Y-%m-%d")
-> 
-  > # Comprobar si hay valores NA en las columnas de fecha
-  > cat("Número de valores NA en columna 6 (fecha_solicitud):", sum(is.na(datos[[6]])), "\n")
-Número de valores NA en columna 6 (fecha_solicitud): 0 
-> cat("Número de valores NA en columna 17 (fecha_aprobacion):", sum(is.na(datos[[17]])), "\n")
+  > # Verificar que la conversión a fecha fue exitosa
+  > cat("Número de valores NA en columna 17 (fecha_aprobacion):", sum(is.na(datos[[17]])), "\n")
 Número de valores NA en columna 17 (fecha_aprobacion): 6412 
 > 
-  > # Filtrar solo los registros de la columna 17 (fecha_aprobacion) en el rango de fechas
+  > # Filtrar los registros en el rango de fechas de la columna 17 (fecha_aprobacion)
   > datos_filtrados <- datos %>%
   +   filter(!is.na(datos[[17]])) %>%  # Filtrar solo si la columna 17 no tiene NA
-  +   filter(datos[[17]] >= fecha_inicio & datos[[17]] <= fecha_fin)
+  +   filter(datos[[17]] >= fecha_inicio & datos[[17]] <= fecha_fin)  # Filtrar por rango de fechas
 Error in `filter()`:
   ℹ In argument: `datos[[17]] >= fecha_inicio & datos[[17]] <= fecha_fin`.
 Caused by error:
   ! `..1` must be of size 0 or 1, not size 6412.
 Run `rlang::last_trace()` to see where the error occurred.
+> rlang::last_trace()
+<error/rlang_error>
+  Error in `filter()`:
+  ℹ In argument: `datos[[17]] >= fecha_inicio & datos[[17]] <= fecha_fin`.
+Caused by error:
+  ! `..1` must be of size 0 or 1, not size 6412.
+---
+  Backtrace:
+  ▆
+1. ├─datos %>% filter(!is.na(datos[[17]])) %>% ...
+2. ├─dplyr::filter(...)
+3. ├─dplyr:::filter.data.frame(., datos[[17]] >= fecha_inicio & datos[[17]] <= fecha_fin)
+4. │ └─dplyr:::filter_rows(.data, dots, by)
+5. │   └─dplyr:::filter_eval(...)
+6. │     ├─base::withCallingHandlers(...)
+7. │     └─mask$eval_all_filter(dots, env_filter)
+8. │       └─dplyr (local) eval()
+9. └─dplyr:::dplyr_internal_error(...)
+Run rlang::last_trace(drop = FALSE) to see 5 hidden frames.
