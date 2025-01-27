@@ -25,7 +25,6 @@ if (is.numeric(datos[[6]])) {
 }
 
 # Convertir la columna 17 (fecha_aprobacion) a formato de fecha "YYYY-MM-DD" extrayendo solo la fecha
-# Primero convertimos la columna 17 de timestamp a solo fecha (ignorando la hora)
 if (is.numeric(datos[[17]])) {
   datos[[17]] <- as.Date(datos[[17]], origin = "1899-12-30")  # Si es numérica (timestamp)
 } else {
@@ -33,14 +32,26 @@ if (is.numeric(datos[[17]])) {
   datos[[17]] <- as.Date(substr(datos[[17]], 1, 10), format = "%d/%m/%Y")
 }
 
+# Verificar dimensiones de las columnas antes de continuar
+cat("Dimensión de la columna 6:", length(datos[[6]]), "\n")
+cat("Dimensión de la columna 17:", length(datos[[17]]), "\n")
+
 # Asegurarse de que las columnas 6 y 17 estén en formato "YYYY-MM-DD"
 datos[[6]] <- format(datos[[6]], "%Y-%m-%d")
 datos[[17]] <- format(datos[[17]], "%Y-%m-%d")
 
+# Comprobar si hay valores NA en las columnas de fecha
+cat("Número de valores NA en columna 6 (fecha_solicitud):", sum(is.na(datos[[6]])), "\n")
+cat("Número de valores NA en columna 17 (fecha_aprobacion):", sum(is.na(datos[[17]])), "\n")
+
 # Filtrar registros que estén dentro del rango de fechas definido
 datos_filtrados <- datos %>%
+  filter(!is.na(datos[[6]]) & !is.na(datos[[17]])) %>%  # Filtrar solo si las fechas no son NA
   filter(datos[[6]] >= fecha_inicio & datos[[6]] <= fecha_fin) %>%
   filter(datos[[17]] >= fecha_inicio & datos[[17]] <= fecha_fin)
+
+# Verificar las dimensiones después del filtrado
+cat("Dimensión después del filtrado:", nrow(datos_filtrados), "\n")
 
 # Conectar a la base de datos SQLite
 conn <- dbConnect(SQLite(), db_path)
@@ -59,10 +70,3 @@ dbWriteTable(conn, "sanciones", datos_filtrados, append = TRUE, row.names = FALS
 dbDisconnect(conn)
 
 print("Datos filtrados e insertados en la base de datos correctamente.")
-
-##########
-Error in `filter()`:
-  ℹ In argument: `datos[[17]] >= fecha_inicio & datos[[17]] <= fecha_fin`.
-Caused by error:
-  ! `..1` must be of size 6410 or 1, not size 6412.
-Run `rlang::last_trace()` to see where the error occurred.
