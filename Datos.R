@@ -82,23 +82,32 @@ New names:
 • `` -> `...16`
 • `` -> `...17`
 > 
+  > # Revisar los primeros valores de la columna 17 para entender su estructura
+  > head(datos[[17]])
+[1] "2025-01-10 13:27:25 UTC" "2025-01-21 18:59:09 UTC" "2024-10-23 16:46:51 UTC" "2024-09-10 19:48:27 UTC" "2024-10-24 14:10:09 UTC"
+[6] "2024-10-10 14:11:50 UTC"
+> 
   > # Asegurarse de que la columna 17 esté en formato numérico (si es timestamp)
-  > # Convertir la columna 17 (fecha_aprobacion) desde número (timestamp de Excel) a fecha "YYYY-MM-DD"
   > if (is.numeric(datos[[17]])) {
-    +   # Convertir el número de timestamp de Excel a fecha
-      +   datos[[17]] <- as.Date(datos[[17]], origin = "1899-12-30")  # Conversión de timestamp a fecha
+    +   # Comprobar si la columna es un número de timestamp de Excel
+      +   # Convertir el número de timestamp de Excel a fecha y hora
+      +   datos[[17]] <- as.POSIXct(datos[[17]], origin = "1899-12-30", tz = "UTC")
       + } else {
-        +   # Si la columna no es numérica, se extrae la fecha de la cadena de texto
+        +   # Si la columna contiene texto, intentamos extraer las fechas de la cadena
           +   datos[[17]] <- as.Date(substr(datos[[17]], 1, 10), format = "%d/%m/%Y")
           + }
 > 
-  > # Verificar que la conversión a fecha fue exitosa
+  > # Verificar los resultados después de la conversión
   > cat("Número de valores NA en columna 17 (fecha_aprobacion):", sum(is.na(datos[[17]])), "\n")
 Número de valores NA en columna 17 (fecha_aprobacion): 6412 
+> cat("Primeros valores de la columna 17 después de la conversión:\n")
+Primeros valores de la columna 17 después de la conversión:
+  > head(datos[[17]])
+[1] NA NA NA NA NA NA
 > 
   > # Filtrar los registros en el rango de fechas de la columna 17 (fecha_aprobacion)
   > datos_filtrados <- datos %>%
-  +   mutate(fecha_aprobacion = as.Date(datos[[17]], origin = "1899-12-30")) %>%  # Asegurarse que la fecha esté en formato Date
+  +   mutate(fecha_aprobacion = as.Date(datos[[17]])) %>%  # Asegurarse que la fecha esté en formato Date
   +   filter(!is.na(fecha_aprobacion)) %>%  # Filtrar solo si la columna fecha_aprobacion no tiene NA
   +   filter(fecha_aprobacion >= fecha_inicio & fecha_aprobacion <= fecha_fin)  # Filtrar por rango de fechas
 > 
