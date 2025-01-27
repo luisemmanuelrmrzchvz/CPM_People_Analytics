@@ -98,29 +98,30 @@ Número de valores NA en columna 17 (fecha_aprobacion): 6412
 > 
   > # Filtrar los registros en el rango de fechas de la columna 17 (fecha_aprobacion)
   > datos_filtrados <- datos %>%
-  +   filter(!is.na(datos[[17]])) %>%  # Filtrar solo si la columna 17 no tiene NA
-  +   filter(datos[[17]] >= fecha_inicio & datos[[17]] <= fecha_fin)  # Filtrar por rango de fechas
-Error in `filter()`:
-  ℹ In argument: `datos[[17]] >= fecha_inicio & datos[[17]] <= fecha_fin`.
-Caused by error:
-  ! `..1` must be of size 0 or 1, not size 6412.
-Run `rlang::last_trace()` to see where the error occurred.
-> rlang::last_trace()
-<error/rlang_error>
-  Error in `filter()`:
-  ℹ In argument: `datos[[17]] >= fecha_inicio & datos[[17]] <= fecha_fin`.
-Caused by error:
-  ! `..1` must be of size 0 or 1, not size 6412.
----
-  Backtrace:
-  ▆
-1. ├─datos %>% filter(!is.na(datos[[17]])) %>% ...
-2. ├─dplyr::filter(...)
-3. ├─dplyr:::filter.data.frame(., datos[[17]] >= fecha_inicio & datos[[17]] <= fecha_fin)
-4. │ └─dplyr:::filter_rows(.data, dots, by)
-5. │   └─dplyr:::filter_eval(...)
-6. │     ├─base::withCallingHandlers(...)
-7. │     └─mask$eval_all_filter(dots, env_filter)
-8. │       └─dplyr (local) eval()
-9. └─dplyr:::dplyr_internal_error(...)
-Run rlang::last_trace(drop = FALSE) to see 5 hidden frames.
+  +   mutate(fecha_aprobacion = as.Date(datos[[17]], origin = "1899-12-30")) %>%  # Asegurarse que la fecha esté en formato Date
+  +   filter(!is.na(fecha_aprobacion)) %>%  # Filtrar solo si la columna fecha_aprobacion no tiene NA
+  +   filter(fecha_aprobacion >= fecha_inicio & fecha_aprobacion <= fecha_fin)  # Filtrar por rango de fechas
+> 
+  > # Verificar las dimensiones después del filtrado
+  > cat("Dimensión después del filtrado:", nrow(datos_filtrados), "\n")
+Dimensión después del filtrado: 0 
+> 
+  > # Conectar a la base de datos SQLite
+  > conn <- dbConnect(SQLite(), db_path)
+> 
+  > # Obtener los nombres de las columnas de la tabla SQLite (excluyendo id_key)
+  > columnas_db <- dbListFields(conn, "sanciones")
+> columnas_db <- columnas_db[columnas_db != "id_key"]
+> 
+  > # Renombrar las columnas del data frame para coincidir con la base de datos
+  > colnames(datos_filtrados) <- columnas_db
+> 
+  > # Insertar los datos filtrados en la tabla sanciones
+  > dbWriteTable(conn, "sanciones", datos_filtrados, append = TRUE, row.names = FALSE)
+Error: Columns `NA` not found
+
+########################
+
+
+10/01/2025  01:27:25 p. m.
+45667.5607060185
