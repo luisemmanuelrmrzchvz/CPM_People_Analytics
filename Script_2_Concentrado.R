@@ -17,7 +17,8 @@ fecha_fin <- as.Date("2025-01-23")
 # Leer el archivo Excel, omitiendo la primera fila de títulos
 datos <- read_excel(ruta_archivo, skip = 1, col_names = FALSE)
 
-# Asignar nombres únicos a las columnas para evitar duplicados
+# Verificar los nombres de las columnas y corregir si hay duplicados
+colnames(datos)
 colnames(datos) <- make.names(colnames(datos), unique = TRUE)
 
 # Asegurarse de que la columna 17 (fecha_aprobacion) esté en formato POSIXct (fecha y hora)
@@ -44,32 +45,5 @@ datos_filtrados <- datos %>%
   filter(!is.na(fecha_aprobacion) & !is.na(fecha_solicitud)) %>%  # Filtrar registros válidos
   filter(fecha_aprobacion >= fecha_inicio & fecha_aprobacion <= fecha_fin)  # Filtrar por rango de fechas
 
-# Verificar las dimensiones después del filtrado
-cat("Dimensión después del filtrado:", nrow(datos_filtrados), "\n")
-
-# Asegurarse de que las columnas de fecha sean de tipo Date antes de aplicar format
-datos_filtrados$fecha_solicitud <- as.Date(datos_filtrados$fecha_solicitud)
-datos_filtrados$fecha_aprobacion <- as.Date(datos_filtrados$fecha_aprobacion)
-
-# Convertir las fechas a texto en formato "YYYY-MM-DD"
-datos_filtrados$fecha_solicitud <- format(datos_filtrados$fecha_solicitud, "%Y-%m-%d")
-datos_filtrados$fecha_aprobacion <- format(datos_filtrados$fecha_aprobacion, "%Y-%m-%d")
-
-# Conectar a la base de datos SQLite
-conn <- dbConnect(SQLite(), db_path)
-
-# Obtener los nombres de las columnas de la tabla SQLite (excluyendo id_key)
-columnas_db <- dbListFields(conn, "sanciones")
-columnas_db <- columnas_db[columnas_db != "id_key"]
-
-# Renombrar las columnas del data frame para coincidir con la base de datos
-colnames(datos_filtrados) <- columnas_db
-
-# Insertar los datos filtrados en la tabla sanciones
-dbWriteTable(conn, "sanciones", datos_filtrados, append = TRUE, row.names = FALSE)
-
-# Cerrar la conexión a la base de datos
-dbDisconnect(conn)
-
-# Mensaje final
-print("Datos filtrados e insertados en la base de datos correctamente.")
+# Mostrar el resultado
+head(datos_filtrados)
