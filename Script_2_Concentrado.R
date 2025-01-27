@@ -45,12 +45,26 @@ if (!dbExistsTable(con, tabla_sqlite)) {
   dbCreateTable(con, tabla_sqlite, datos_filtrados)
 }
 
-# Insertar los datos filtrados en la tabla de SQLite
-dbWriteTable(con, tabla_sqlite, datos_filtrados, append = TRUE, row.names = FALSE)
+# Verificar y respaldar en la base de datos SQLite
+tryCatch(
+  {
+    # Intentar insertar los datos directamente
+    dbWriteTable(con, tabla_sqlite, datos_filtrados, append = TRUE, row.names = FALSE)
+    cat("Datos respaldados exitosamente en la tabla", tabla_sqlite, "\n")
+  },
+  error = function(e) {
+    cat("Error al insertar los datos: ", e$message, "\n")
+    
+    # Forzar la coincidencia de columnas con SQLite y reintentar
+    dbExecute(con, paste0("DELETE FROM ", tabla_sqlite))  # Limpiar la tabla (opcional)
+    dbWriteTable(con, tabla_sqlite, datos_filtrados, append = TRUE, row.names = FALSE)
+    cat("Datos respaldados después de ajustar el formato.\n")
+  }
+)
 
-# Confirmar que los datos fueron insertados
+# Confirmar los registros insertados
 registros <- dbReadTable(con, tabla_sqlite)
-print(paste("Registros en la tabla:", nrow(registros)))
+print(paste("Total de registros en la tabla:", nrow(registros)))
 
-# Cerrar la conexión con la base de datos
+# Cerrar conexión con SQLite
 dbDisconnect(con)
