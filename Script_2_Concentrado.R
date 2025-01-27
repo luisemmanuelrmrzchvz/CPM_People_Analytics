@@ -17,19 +17,27 @@ fecha_fin <- as.Date("2025-01-23")
 # Leer el archivo Excel, omitiendo la primera fila de títulos
 datos <- read_excel(ruta_archivo, skip = 1, col_names = FALSE)
 
-# Convertir la columna 6 (fecha_solicitud) de formato numérico de Excel a "YYYY-MM-DD"
-datos[[6]] <- format(as.Date(as.numeric(datos[[6]]), origin = "1899-12-30"), "%Y-%m-%d")
-
-# Convertir la columna 17 (fecha_aprobacion) de timestamp a "YYYY-MM-DD"
-if (inherits(datos[[17]], "POSIXt")) {
-  datos[[17]] <- format(as.Date(datos[[17]]), "%Y-%m-%d")
+# Verificar el tipo de datos en la columna 6 y convertir a fecha "YYYY-MM-DD"
+if (is.numeric(datos[[6]])) {
+  datos[[6]] <- format(as.Date(as.numeric(datos[[6]]), origin = "1899-12-30"), "%Y-%m-%d")
 } else {
-  datos[[17]] <- format(as.Date(as.POSIXct(datos[[17]], format = "%d/%m/%Y %I:%M:%S %p", tz = "UTC")), "%Y-%m-%d")
+  datos[[6]] <- format(as.Date(datos[[6]], format = "%d/%m/%Y"), "%Y-%m-%d")
 }
+
+# Verificar el tipo de datos en la columna 17 (timestamp) y convertir a fecha "YYYY-MM-DD"
+if (is.numeric(datos[[17]])) {
+  datos[[17]] <- format(as.Date(as.numeric(datos[[17]]), origin = "1899-12-30"), "%Y-%m-%d")
+} else {
+  datos[[17]] <- format(as.Date(substr(datos[[17]], 1, 10), format = "%d/%m/%Y"), "%Y-%m-%d")
+}
+
+# Convertir las columnas de fecha a tipo Date para el filtrado
+datos[[6]] <- as.Date(datos[[6]])
+datos[[17]] <- as.Date(datos[[17]])
 
 # Filtrar registros que estén dentro del rango de fechas definido
 datos_filtrados <- datos %>%
-  filter(as.Date(`...6`) >= fecha_inicio & as.Date(`...6`) <= fecha_fin)
+  filter(datos[[6]] >= fecha_inicio & datos[[6]] <= fecha_fin)
 
 # Conectar a la base de datos SQLite
 conn <- dbConnect(SQLite(), db_path)
@@ -48,11 +56,3 @@ dbWriteTable(conn, "sanciones", datos_filtrados, append = TRUE, row.names = FALS
 dbDisconnect(conn)
 
 print("Datos filtrados e insertados en la base de datos correctamente.")
-
-
-########
-Error in `filter()`:
-  ℹ In argument: `as.Date(...6) >= fecha_inicio & as.Date(...6) <= fecha_fin`.
-Caused by error in `charToDate()`:
-  ! la cadena de caracteres no está en un formato estándar inequívoco
-Run `rlang::last_trace()` to see where the error occurred.
