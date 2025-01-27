@@ -33,12 +33,12 @@ if (is.numeric(datos[[17]])) {
   datos[[17]] <- as.Date(substr(datos[[17]], 1, 10), format = "%d/%m/%Y")
 }
 
+# Asegurarse de que la columna 17 esté en formato Date
+datos[[17]] <- as.Date(datos[[17]], format = "%Y-%m-%d")
+
 # Verificar dimensiones de las columnas antes de continuar
 cat("Dimensión de la columna 6:", length(datos[[6]]), "\n")
 cat("Dimensión de la columna 17:", length(datos[[17]]), "\n")
-
-# Asegurarse de que la columna 17 esté en formato "YYYY-MM-DD"
-datos[[17]] <- format(datos[[17]], "%Y-%m-%d")
 
 # Comprobar si hay valores NA en las columnas de fecha
 cat("Número de valores NA en columna 6 (fecha_solicitud):", sum(is.na(datos[[6]])), "\n")
