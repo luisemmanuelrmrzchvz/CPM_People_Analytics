@@ -1,87 +1,49 @@
-# Cargar librerías necesarias 
+# Cargar librerías necesarias
 library(readxl)
-library(dplyr)
 library(DBI)
 library(RSQLite)
 
-# Ruta del archivo de entrada
-ruta_archivo <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/Sanciones.xlsx"
-
-# Ruta de la base de datos SQLite
+# Ruta del archivo de entrada y base de datos SQLite
 db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
+archivo_excel <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/Datos_Colaboradores.xlsx"
 
-# Fechas de inicio y fin para la selección de registros
-fecha_inicio <- as.Date("2021-12-01")
-fecha_fin <- as.Date("2025-01-23")
+# Leer el archivo XLSX ignorando la primera fila (títulos de columnas)
+datos <- read_excel(archivo_excel, skip = 1, col_names = FALSE)
 
-# Leer el archivo Excel, omitiendo la primera fila de títulos
-datos <- read_excel(ruta_archivo, skip = 1, col_names = FALSE)
+# Definir las columnas a formatear como fechas (14, 15, 16, 19)
+columnas_fecha <- c(14, 15, 16, 19)
 
-# Asignar nombres únicos a las columnas automáticamente
-colnames(datos) <- make.names(paste0("Col", seq_along(datos)), unique = TRUE)
+# Convertir las columnas seleccionadas a formato de fecha "YYYY-MM-DD"
+for (col in columnas_fecha) {
+  datos[[col]] <- format(as.Date(datos[[col]], origin = "1899-12-30"), "%Y-%m-%d")
+}
 
-# Renombrar las columnas relevantes (columna 17 y 6) para identificar fechas correctamente
-datos <- datos %>%
-  rename(fecha_aprobacion = Col17, fecha_solicitud = Col6)
+# Conectar a la base de datos SQLite
+conn <- dbConnect(SQLite(), db_path)
 
-# Convertir las columnas de fecha en formato POSIXct (fecha y hora) y luego a Date (solo fecha)
-datos <- datos %>%
-  mutate(
-    fecha_aprobacion = as.Date(as.POSIXct(fecha_aprobacion, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")),
-    fecha_solicitud = as.Date(as.POSIXct(fecha_solicitud, format = "%Y-%m-%d %H:%M:%S", tz = "UTC"))
-  )
+# Verificar si existen registros en la tabla
+registros_existentes <- dbGetQuery(conn, "SELECT COUNT(*) FROM datos_colaboradores")$`COUNT(*)`
 
-# Filtrar los registros en el rango de fechas
-datos_filtrados <- datos %>%
-  filter(!is.na(fecha_aprobacion) & !is.na(fecha_solicitud)) %>%
-  filter(fecha_aprobacion >= fecha_inicio & fecha_aprobacion <= fecha_fin)
+# Si existen registros, eliminarlos
+if (registros_existentes > 0) {
+  dbExecute(conn, "DELETE FROM datos_colaboradores")
+}
 
-# Seleccionar y renombrar columnas para que coincidan con la estructura de la tabla SQLite
-datos_filtrados <- datos_filtrados %>%
-  mutate(
-    id_colaborador = as.integer(Col1), 
-    nombre = as.character(Col2),
-    antiguedad_meses = as.numeric(Col3),
-    antiguedad_years = as.numeric(Col4),
-    id_sancion = as.integer(Col5),
-    clasificacion_sancion = as.character(Col7),
-    motivo_sancion = as.character(Col8),
-    detalle_sancion = as.character(Col9),
-    descripcion_breve = as.character(Col10),
-    acta_hechos = as.logical(Col11),
-    causa_sancion = as.character(Col12),
-    solicitado_por = as.character(Col13),
-    analista_rl = as.character(Col14),
-    tipo_sancion = as.character(Col15),
-    dias_suspension = as.integer(Col16),
-    # Convertir las fechas a formato texto en YYYY-MM-DD
-    fecha_solicitud = format(fecha_solicitud, "%Y-%m-%d"),
-    fecha_aprobacion = format(fecha_aprobacion, "%Y-%m-%d")
-  ) %>%
-  select(
-    id_colaborador, nombre, antiguedad_meses, antiguedad_years, id_sancion, 
-    fecha_solicitud, clasificacion_sancion, motivo_sancion, detalle_sancion, 
-    descripcion_breve, acta_hechos, causa_sancion, solicitado_por, analista_rl, 
-    tipo_sancion, dias_suspension, fecha_aprobacion
-  )
+# Definir las columnas de la tabla de base de datos
+columnas_db <- c("id_colaborador", "nombre_completo", "puesto", "id_centro_costos", "centro_costos", 
+                 "id_departamento", "departamento", "id_ubicacion", "ubicacion", "plaza", "regional", 
+                 "regional_hr", "status_colaborador", "fecha_entrada_puesto", "fecha_baja", 
+                 "fecha_ultimo_dia_laborado", "causa_baja", "motivo_baja", "fecha_nacimiento", 
+                 "estado_civil", "genero", "area_personal", "area_cobranza", "tipo_reclutamiento", 
+                 "tipo_contrato", "uniforme", "nivel_gestion")
 
-# Establecer conexión con la base de datos SQLite
-con <- dbConnect(SQLite(), dbname = db_path)
+# Renombrar las columnas de los datos para que coincidan con la tabla de SQLite
+colnames(datos) <- columnas_db
 
-# Insertar los datos en la tabla existente
-tryCatch(
-  {
-    dbWriteTable(con, "sanciones", datos_filtrados, append = TRUE, row.names = FALSE)
-    cat("Datos respaldados exitosamente en la tabla 'sanciones'.\n")
-  },
-  error = function(e) {
-    cat("Error al insertar los datos: ", e$message, "\n")
-  }
-)
+# Insertar los datos en la tabla datos_colaboradores
+dbWriteTable(conn, "datos_colaboradores", datos, append = TRUE, row.names = FALSE)
 
-# Confirmar los registros insertados
-total_registros <- dbGetQuery(con, "SELECT COUNT(*) as total FROM sanciones")
-cat("Total de registros en la tabla 'sanciones':", total_registros$total, "\n")
+# Cerrar la conexión
+dbDisconnect(conn)
 
-# Cerrar conexión con SQLite
-dbDisconnect(con)
+print("Datos insertados en la base de datos correctamente.")
