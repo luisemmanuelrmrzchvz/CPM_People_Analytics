@@ -17,19 +17,23 @@ fecha_fin <- as.Date("2025-01-23")
 # Leer el archivo Excel, omitiendo la primera fila de títulos
 datos <- read_excel(ruta_archivo, skip = 1, col_names = FALSE)
 
+# Revisar los primeros valores de la columna 17 para entender su estructura
+head(datos[[17]])
+
 # Asegurarse de que la columna 17 esté en formato numérico (si es timestamp)
-# Convertir la columna 17 (fecha_aprobacion) desde número (timestamp de Excel) a fecha "YYYY-MM-DD"
 if (is.numeric(datos[[17]])) {
-  # Convertir el número de timestamp de Excel a fecha
-  # Convertir la parte entera a fecha y la parte decimal a hora
+  # Comprobar si la columna es un número de timestamp de Excel
+  # Convertir el número de timestamp de Excel a fecha y hora
   datos[[17]] <- as.POSIXct(datos[[17]], origin = "1899-12-30", tz = "UTC")
 } else {
-  # Si la columna no es numérica, se extrae la fecha de la cadena de texto
+  # Si la columna contiene texto, intentamos extraer las fechas de la cadena
   datos[[17]] <- as.Date(substr(datos[[17]], 1, 10), format = "%d/%m/%Y")
 }
 
-# Verificar que la conversión a fecha fue exitosa
+# Verificar los resultados después de la conversión
 cat("Número de valores NA en columna 17 (fecha_aprobacion):", sum(is.na(datos[[17]])), "\n")
+cat("Primeros valores de la columna 17 después de la conversión:\n")
+head(datos[[17]])
 
 # Filtrar los registros en el rango de fechas de la columna 17 (fecha_aprobacion)
 datos_filtrados <- datos %>%
