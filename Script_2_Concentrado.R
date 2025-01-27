@@ -21,7 +21,8 @@ datos <- read_excel(ruta_archivo, skip = 1, col_names = FALSE)
 # Convertir la columna 17 (fecha_aprobacion) desde número (timestamp de Excel) a fecha "YYYY-MM-DD"
 if (is.numeric(datos[[17]])) {
   # Convertir el número de timestamp de Excel a fecha
-  datos[[17]] <- as.Date(datos[[17]], origin = "1899-12-30")  # Conversión de timestamp a fecha
+  # Convertir la parte entera a fecha y la parte decimal a hora
+  datos[[17]] <- as.POSIXct(datos[[17]], origin = "1899-12-30", tz = "UTC")
 } else {
   # Si la columna no es numérica, se extrae la fecha de la cadena de texto
   datos[[17]] <- as.Date(substr(datos[[17]], 1, 10), format = "%d/%m/%Y")
@@ -32,7 +33,7 @@ cat("Número de valores NA en columna 17 (fecha_aprobacion):", sum(is.na(datos[[
 
 # Filtrar los registros en el rango de fechas de la columna 17 (fecha_aprobacion)
 datos_filtrados <- datos %>%
-  mutate(fecha_aprobacion = as.Date(datos[[17]], origin = "1899-12-30")) %>%  # Asegurarse que la fecha esté en formato Date
+  mutate(fecha_aprobacion = as.Date(datos[[17]])) %>%  # Asegurarse que la fecha esté en formato Date
   filter(!is.na(fecha_aprobacion)) %>%  # Filtrar solo si la columna fecha_aprobacion no tiene NA
   filter(fecha_aprobacion >= fecha_inicio & fecha_aprobacion <= fecha_fin)  # Filtrar por rango de fechas
 
