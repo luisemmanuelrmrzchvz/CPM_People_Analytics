@@ -27,17 +27,14 @@ datos[[6]] <- as.POSIXct(datos[[6]], format = "%Y-%m-%d %H:%M:%S UTC", tz = "UTC
 datos$fecha_aprobacion <- as.Date(datos[[17]])  # Convertir la columna 17 a solo fecha
 datos$fecha_solicitud <- as.Date(datos[[6]])    # Convertir la columna 6 a solo fecha
 
-# Verificar los resultados después de la conversión
-cat("Número de valores NA en columna 17 (fecha_aprobacion):", sum(is.na(datos$fecha_aprobacion)), "\n")
-cat("Número de valores NA en columna 6 (fecha_solicitud):", sum(is.na(datos$fecha_solicitud)), "\n")
-cat("Primeros valores de la columna 17 después de la conversión:\n")
-head(datos$fecha_aprobacion)
-cat("Primeros valores de la columna 6 después de la conversión:\n")
-head(datos$fecha_solicitud)
-
 # Eliminar las columnas adicionales que fueron generadas en el proceso de conversión
 datos <- datos %>%
   select(-c(17, 6))  # Eliminar las columnas originales que no son necesarias
+
+# Reordenar las columnas para restaurar el orden original
+# Vamos a reinsertar las columnas de fecha en las posiciones correctas
+colnames(datos)[colnames(datos) == "fecha_solicitud"] <- colnames(datos)[6]  # Restablecer fecha_solicitud en su lugar
+colnames(datos)[colnames(datos) == "fecha_aprobacion"] <- colnames(datos)[17]  # Restablecer fecha_aprobacion en su lugar
 
 # Filtrar los registros en el rango de fechas de las columnas fecha_aprobacion y fecha_solicitud
 datos_filtrados <- datos %>%
