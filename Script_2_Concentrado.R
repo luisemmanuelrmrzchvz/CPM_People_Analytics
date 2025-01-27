@@ -17,27 +17,27 @@ fecha_fin <- as.Date("2025-01-23")
 # Leer el archivo Excel, omitiendo la primera fila de títulos
 datos <- read_excel(ruta_archivo, skip = 1, col_names = FALSE)
 
-# Verificar el tipo de datos en la columna 6 y convertir a fecha "YYYY-MM-DD"
+# Convertir la columna 6 (fecha_solicitud) a formato de fecha "YYYY-MM-DD"
 if (is.numeric(datos[[6]])) {
-  datos[[6]] <- format(as.Date(as.numeric(datos[[6]]), origin = "1899-12-30"), "%Y-%m-%d")
+  datos[[6]] <- as.Date(datos[[6]], origin = "1899-12-30")  # Conversión desde el formato numérico de Excel
 } else {
-  datos[[6]] <- format(as.Date(datos[[6]], format = "%d/%m/%Y"), "%Y-%m-%d")
+  datos[[6]] <- as.Date(datos[[6]], format = "%d/%m/%Y")  # Conversión desde texto
 }
 
-# Verificar el tipo de datos en la columna 17 (timestamp) y convertir a fecha "YYYY-MM-DD"
+# Convertir la columna 17 (fecha_aprobacion) a formato de fecha "YYYY-MM-DD"
 if (is.numeric(datos[[17]])) {
-  datos[[17]] <- format(as.Date(as.numeric(datos[[17]]), origin = "1899-12-30"), "%Y-%m-%d")
+  datos[[17]] <- as.Date(datos[[17]], origin = "1899-12-30")
 } else {
-  datos[[17]] <- format(as.Date(substr(datos[[17]], 1, 10), format = "%d/%m/%Y"), "%Y-%m-%d")
+  datos[[17]] <- as.Date(substr(datos[[17]], 1, 10), format = "%d/%m/%Y")
 }
-
-# Convertir las columnas de fecha a tipo Date para el filtrado
-datos[[6]] <- as.Date(datos[[6]])
-datos[[17]] <- as.Date(datos[[17]])
 
 # Filtrar registros que estén dentro del rango de fechas definido
 datos_filtrados <- datos %>%
   filter(datos[[6]] >= fecha_inicio & datos[[6]] <= fecha_fin)
+
+# Verificar que las columnas 6 y 17 ahora estén en formato correcto antes de guardar
+datos_filtrados[[6]] <- format(datos_filtrados[[6]], "%Y-%m-%d")
+datos_filtrados[[17]] <- format(datos_filtrados[[17]], "%Y-%m-%d")
 
 # Conectar a la base de datos SQLite
 conn <- dbConnect(SQLite(), db_path)
