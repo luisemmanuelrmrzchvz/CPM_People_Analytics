@@ -24,7 +24,7 @@ lista_datos <- list()
 for (fecha in formato_fechas) {
   nombre_archivo <- paste0("Posiciones_", fecha, ".xlsx")
   ruta_archivo <- file.path(ruta_carpeta, nombre_archivo)
-
+  
   if (file.exists(ruta_archivo)) {
     mensaje <- paste("Cargando archivo:", nombre_archivo)
     print(mensaje)
@@ -34,7 +34,7 @@ for (fecha in formato_fechas) {
     
     # Añadir la fecha del archivo como última columna
     datos$Fecha_Archivo <- as.Date(fecha, format = "%Y%m%d")
-
+    
     # Agregar a la lista
     lista_datos[[length(lista_datos) + 1]] <- datos
   } else {
