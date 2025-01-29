@@ -1,75 +1,57 @@
-CREATE TABLE hist_movimientos (
-  id_key INTEGER PRIMARY KEY AUTOINCREMENT,
-  id_colaborador INTEGER,
-  nombre TEXT,
-  evento_asociado TEXT,
-  razon_evento TEXT,
-  fecha_efectiva_movimiento DATE,
-  fecha_vencimiento_contrato DATE,
-  puesto_anterior TEXT,
-  trans_sequence_mov_dia INTEGER,
-  movimiento_creado_por INTEGER,
-  evento_asociado_etiqueta TEXT,
-  area_personal TEXT,
-  dias_laborales_por_semana INTEGER,
-  familia_puestos TEXT,
-  fecha_entrada_posicion DATE,
-  nivel_escala_remuneracion TEXT,
-  etiqueta_plan_horario TEXT,
-  tabulador_salarial TEXT,
-  fecha_original_contratacion DATE,
-  fecha_baja DATE,
-  fecha_ultimo_dia_laborado DATE,
-  causa_baja TEXT,
-  motivo_baja TEXT,
-  detalle_baja TEXT,
-  id_posicion INTEGER,
-  posicion_tipo TEXT,
-  posicion_regional TEXT,
-  posicion_plaza TEXT,
-  posicion_fecha_vacante DATE,
-  posicion_comunidad_estrategia BOOLEAN,
-  posicion_motivo TEXT,
-  posicion_motivo_especifico TEXT,
-  posiciondepartamento TEXT,
-  posicion_centro_costos TEXT,
-  posicion_estado TEXT,
-  posicion_localidad TEXT,
-  posicion_division TEXT,
-  posicion_municipio TEXT,
-  posicion_ubicacion TEXT,
-  posicion_puesto TEXT,
-  id_centro_costos INTEGER,
-  nivel_gestion TEXT,
-  nivel_1 TEXT,
-  nivel_2 TEXT,
-  nivel_3 TEXT,
-  tipo_contrato TEXT,
-  nombre_puesto TEXT,
-  tipo_reclutamiento TEXT,
-  area_cobranza TEXT,
-  puesto_generico TEXT,
-  area_especialidad_deseada TEXT,
-  clasificacion_riesgo TEXT,
-  clasificacion_liderazgo TEXT,
-  disponibilidad_viajar BOOLEAN,
-  escolaridad_deseada TEXT,
-  grupo_personal TEXT,
-  limitante TEXT,
-  modalidad_puesto TEXT,
-  perfil_profesional TEXT,
-  pruebas_psicometricas TEXT,
-  segmento_puesto TEXT,
-  genero TEXT,
-  estado_civil TEXT,
-  estado_nacimiento TEXT,
-  fecha_nacimiento DATE,
-  lengua_nativa TEXT,
-  limitante_fisica INTEGER,
-  nacionalidad TEXT,
-  pais_nacimiento TEXT,
-  segunda_nacionalidad TEXT
-);
+tengo el siguiente script en R, para alimentar una tabla en SQLite, aunque necesito ajustar el script de R, para antes de insertar los datos del archivo, valide si el registro de mi columna 1 de mi archivo, ya existe en la tabla de mi base de SQLite, si es el caso necesito que sustituya el campos de mi registro de la tabla, por los nuevos campos de mi registro en el arcchivo de xlsx, adicionalmente me imprima en la consola de R, los registros que identificó que ya existían, y por cuál registro los sustituyo, a modo de visualización del ajuste en la tabla; la tabla que tengo en SQLite la cree como: "CREATE TABLE incidencias (
+    id_key INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_incidencia TEXT,
+    creada_por INTEGER,
+    fecha_creacion DATE,
+    id_workflow_request INTEGER,
+    categoria_ausentismo TEXT,
+    tipo_ausencia TEXT,
+    motivo_permiso TEXT,
+    tramite_personal TEXT,
+    dias_ausencia INTEGER,
+    fecha_inicio DATE,
+    fecha_fin DATE,
+    id_colaborador INTEGER,
+    folio_imss TEXT,
+    ultima_modificacion_por INTEGER,
+    fecha_ultima_modificacion DATE,
+    status_incidencia TEXT
+);"; y el script que necesito ajustar de R es: "# Cargar librerías necesarias
+library(readxl)
+library(dplyr)
+library(DBI)
+library(RSQLite)
 
+# Ruta del archivo de entrada y base de datos SQLite
+db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
+archivo_excel <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/Incidencias.xlsx"
 
-Hist_Movimientos.xlsx
+# Leer el archivo XLSX ignorando la primera fila (títulos de columnas)
+datos <- read_excel(archivo_excel, skip = 1, col_names = FALSE)
+
+# Definir las columnas a formatear como fechas (3, 10, 11, 15)
+columnas_fecha <- c(3, 10, 11, 15)
+
+# Convertir las columnas seleccionadas a formato de fecha "YYYY-MM-DD"
+for (col in columnas_fecha) {
+  datos[[col]] <- format(as.Date(datos[[col]], origin = "1899-12-30"), "%Y-%m-%d")
+}
+
+# Conectar a la base de datos SQLite
+conn <- dbConnect(SQLite(), db_path)
+
+# Obtener los nombres de las columnas de la base de datos (sin incluir id_key)
+columnas_db <- dbListFields(conn, "incidencias")
+columnas_db <- columnas_db[columnas_db != "id_key"]
+
+# Renombrar las columnas para coincidir con la base de datos
+colnames(datos) <- columnas_db
+
+# Insertar los datos en la tabla incidencias
+dbWriteTable(conn, "incidencias", datos, append = TRUE, row.names = FALSE)
+
+# Cerrar la conexión
+dbDisconnect(conn)
+
+print("Datos insertados en la base de datos correctamente.")
+"; cabe hacer mención, que las columnas de DATE, necesito que las lea y guarde como "YYYY-MM-DD", dado que es una tabla de SQLite, y hago la conversión en R, dado que mi archivo de excel en las columnas 3 y 15 tienen formato "DD/MM/YYYY hh:mm:ss a.m." y las 10 y 11 tienen formato "DD/MM/YYYY", por eso hago las conversiones de fechas
