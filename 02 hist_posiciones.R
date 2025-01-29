@@ -5,14 +5,14 @@ library(DBI)
 library(RSQLite)
 
 # Ruta de la carpeta de entrada
-ruta_carpeta <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/Posiciones_Hist"
+ruta_carpeta <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs"
 
 # Ruta de la base de datos SQLite
 db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
 
 # Fechas de inicio y fin para la búsqueda de archivos
-fecha_inicio <- as.Date("2025-01-01")
-fecha_fin <- as.Date("2025-01-23")
+fecha_inicio <- as.Date("2025-01-24")
+fecha_fin <- as.Date("2025-01-24")
 
 # Generar secuencia de fechas entre fecha_inicio y fecha_fin en formato YYYYMMDD
 formato_fechas <- format(seq(fecha_inicio, fecha_fin, by = "day"), "%Y%m%d")

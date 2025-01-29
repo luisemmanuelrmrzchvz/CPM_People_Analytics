@@ -11,8 +11,8 @@ archivo_excel <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/Inc
 # Leer el archivo XLSX ignorando la primera fila (títulos de columnas)
 datos <- read_excel(archivo_excel, skip = 1, col_names = FALSE)
 
-# Definir las columnas a formatear como fechas (2, 3, 7)
-columnas_fecha <- c(2, 3, 7)
+# Definir las columnas a formatear como fechas (3, 10, 11, 15)
+columnas_fecha <- c(3, 10, 11, 15)
 
 # Convertir las columnas seleccionadas a formato de fecha "YYYY-MM-DD"
 for (col in columnas_fecha) {
