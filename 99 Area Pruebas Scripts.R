@@ -52,26 +52,36 @@ dbDisconnect(conn)
 print("Datos insertados en la tabla hist_movimientos correctamente.")
 ######################################################################################################################################
 
-
 # Cargar librerías necesarias
 library(DBI)
 library(RSQLite)
+library(writexl)  # Para guardar en Excel
 
-# Ruta del archivo de entrada y base de datos SQLite
+# Ruta de la base de datos SQLite
 db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
 
 # Conectar a la base de datos SQLite
 conn <- dbConnect(SQLite(), db_path)
 
+# Definir la consulta SQL
+query <- "
+SELECT *
+FROM hist_posiciones
+WHERE hist_posiciones.fecha_daily BETWEEN '2025-01-23' AND '2025-01-24';
+"
+
+# Ejecutar la consulta y guardar el resultado en un data frame
+df <- dbGetQuery(conn, query)
+
 # Cerrar la conexión
 dbDisconnect(conn)
 
+# Ruta para guardar el archivo de Excel
+output_path <- "C:/Users/racl26345/Documents/DataBases/hist_posiciones.xlsx"
 
-################
-SELECT
-*
-  FROM hist_posiciones
-WHERE hist_posiciones.fecha_daily BETWEEN '2025-01-23' AND '2025-01-24'
-;
+# Guardar el DataFrame en un archivo de Excel
+write_xlsx(df, output_path)
 
+# Mensaje de confirmación
+cat("Exportación completada. Archivo guardado en:", output_path, "\n")
 
