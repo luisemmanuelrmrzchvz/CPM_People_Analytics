@@ -50,3 +50,28 @@ dbWriteTable(conn, "hist_movimientos", datos, append = TRUE, row.names = FALSE)
 dbDisconnect(conn)
 
 print("Datos insertados en la tabla hist_movimientos correctamente.")
+######################################################################################################################################
+
+
+# Cargar librerías necesarias
+library(DBI)
+library(RSQLite)
+
+# Ruta del archivo de entrada y base de datos SQLite
+db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
+
+# Conectar a la base de datos SQLite
+conn <- dbConnect(SQLite(), db_path)
+
+# Cerrar la conexión
+dbDisconnect(conn)
+
+
+################
+SELECT
+*
+  FROM hist_posiciones
+WHERE hist_posiciones.fecha_daily BETWEEN '2025-01-23' AND '2025-01-24'
+;
+
+
