@@ -11,7 +11,7 @@ ruta_carpeta <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs"
 db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
 
 # Fechas de inicio y fin para la búsqueda de archivos
-fecha_inicio <- as.Date("2025-01-24")
+fecha_inicio <- as.Date("2025-01-01")
 fecha_fin <- as.Date("2025-01-24")
 
 # Generar secuencia de fechas entre fecha_inicio y fecha_fin en formato YYYYMMDD
@@ -47,8 +47,8 @@ for (fecha in formato_fechas) {
 if (length(lista_datos) > 0) {
   datos_consolidados <- bind_rows(lista_datos)
   
-  # Definir las columnas a formatear como fechas (21, 22, 23, 25, 26, 32, 33, 46)
-  columnas_fecha <- c(21, 22, 23, 25, 26, 32, 33, 46)
+  # Definir las columnas a formatear como fechas (21, 22, 23, 25, 26, 33, 34, 47)
+  columnas_fecha <- c(21, 22, 23, 25, 26, 33, 34, 47)
   
   # Convertir las columnas seleccionadas a formato de fecha "YYYY-MM-DD"
   for (col in columnas_fecha) {

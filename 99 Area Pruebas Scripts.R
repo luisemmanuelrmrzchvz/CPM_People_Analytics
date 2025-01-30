@@ -67,7 +67,8 @@ conn <- dbConnect(SQLite(), db_path)
 query <- "
 SELECT *
 FROM hist_posiciones
-WHERE hist_posiciones.fecha_daily BETWEEN '2025-01-23' AND '2025-01-24';
+WHERE hist_posiciones.fecha_daily = '2025-01-23'
+;
 "
 
 # Ejecutar la consulta y guardar el resultado en un data frame
@@ -77,7 +78,7 @@ df <- dbGetQuery(conn, query)
 dbDisconnect(conn)
 
 # Ruta para guardar el archivo de Excel
-output_path <- "C:/Users/racl26345/Documents/DataBases/hist_posiciones.xlsx"
+output_path <- "C:/Users/racl26345/Downloads/hist_posiciones.xlsx"
 
 # Guardar el DataFrame en un archivo de Excel
 write_xlsx(df, output_path)
