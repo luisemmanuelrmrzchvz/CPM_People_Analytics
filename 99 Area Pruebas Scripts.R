@@ -52,8 +52,6 @@ daily_comparison <- data_today %>%
 status <- daily_comparison %>%
   mutate(
     Cambios = case_when(
-      !existia_ayer & is.na(id_colaborador) ~ 'Nueva Posicion Vacante',
-      !existia_ayer & !is.na(id_colaborador) ~ 'Nueva Posicion Ocupada',
       status == 'I' & existia_ayer & is.na(id_colaborador.y) ~ 'Posicion Inactivada Vacante',
       status == 'I' & existia_ayer & !is.na(id_colaborador.y) ~ 'Posicion Inactivada Ocupada',
       is.na(id_colaborador.y) & !is.na(id_colaborador.x) ~ 'Posicion Cubierta',
