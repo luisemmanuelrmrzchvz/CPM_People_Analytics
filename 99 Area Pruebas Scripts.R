@@ -10,72 +10,84 @@ db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
 # Conectar a la base de datos
 conn <- dbConnect(SQLite(), db_path)
 
-# Query ajustado para obtener datos entre el 31 de diciembre de 2024 y el 31 de enero de 2025
-query <- "
-WITH data_previous AS (
-  SELECT 
-    id_posicion, 
-    id_colaborador, 
-    status, 
-    vacante, 
-    fecha_daily
-  FROM hist_posiciones
-  WHERE fecha_daily BETWEEN '2024-12-31' AND '2025-01-31'
-),
-data_current AS (
-  SELECT 
-    id_posicion, 
-    id_colaborador, 
-    status, 
-    vacante, 
-    fecha_daily
-  FROM hist_posiciones
-  WHERE fecha_daily BETWEEN '2024-12-31' AND '2025-01-31'
-)
-SELECT 
-  t.id_posicion,
-  t.id_colaborador AS id_colaborador_current,
-  p.id_colaborador AS id_colaborador_previous,
-  t.status AS status_current,
-  p.status AS status_previous,
-  t.vacante AS vacante_current,
-  p.vacante AS vacante_previous,
-  CASE
-    WHEN p.id_colaborador IS NULL AND t.id_colaborador IS NULL THEN 'Nueva Posicion Vacante'
-    WHEN p.id_colaborador IS NULL AND t.id_colaborador IS NOT NULL THEN 'Nueva Posicion Ocupada'
-    WHEN p.status = 'I' AND t.id_colaborador IS NULL THEN 'Posicion Inactivada Vacante'
-    WHEN p.status = 'I' AND t.id_colaborador IS NOT NULL THEN 'Posicion Inactivada Ocupada'
-    WHEN p.id_colaborador IS NULL AND t.id_colaborador IS NOT NULL THEN 'Posicion Cubierta'
-    WHEN p.id_colaborador IS NOT NULL AND t.id_colaborador IS NULL THEN 'Posicion Vacante'
-    WHEN t.status = 'I' THEN 'Sin Cambios - Posiciones Inactivas'
-    WHEN t.vacante = 'True' THEN 'Sin Cambios - Posicion Activa Vacante'
-    ELSE 'Sin Cambios - Posicion Activa Ocupada'
-  END AS Cambios
-FROM data_current t
-LEFT JOIN data_previous p ON t.id_posicion = p.id_posicion;
-"
+# Definir las fechas de inicio y fin para la comparación
+start_date <- '2024-12-31'
+end_date <- '2025-01-31'
 
-# Obtener los datos optimizados
-data <- dbGetQuery(conn, query)
+# Crear un vector de fechas
+dates <- seq(as.Date(start_date), as.Date(end_date), by = "days")
+
+# Crear una lista vacía para almacenar los resultados
+result_list <- list()
+
+# Ciclo para comparar los datos de cada día con el día anterior
+for (i in 2:length(dates)) {  # Comenzamos desde el segundo día
+  # Fecha de hoy (día actual)
+  today_date <- dates[i]
+  # Fecha de ayer (día anterior)
+  previous_date <- dates[i - 1]
+  
+  # Consultas para obtener los datos de hoy y ayer
+  query_today <- sprintf("
+    SELECT 
+      id_posicion, 
+      id_colaborador, 
+      status, 
+      vacante, 
+      fecha_daily
+    FROM hist_posiciones
+    WHERE fecha_daily = '%s';
+  ", today_date)
+  
+  query_previous <- sprintf("
+    SELECT 
+      id_posicion, 
+      id_colaborador, 
+      status, 
+      vacante, 
+      fecha_daily
+    FROM hist_posiciones
+    WHERE fecha_daily = '%s';
+  ", previous_date)
+  
+  # Obtener los datos de hoy y ayer
+  data_today <- dbGetQuery(conn, query_today)
+  data_previous <- dbGetQuery(conn, query_previous)
+  
+  # Comparar los datos entre hoy y ayer
+  comparison <- data_today %>%
+    left_join(data_previous, by = "id_posicion", suffix = c("_today", "_previous")) %>%
+    mutate(
+      Cambios = case_when(
+        is.na(id_colaborador_previous) & !is.na(id_colaborador_today) ~ 'Nueva Posicion Ocupada',
+        is.na(id_colaborador_previous) & is.na(id_colaborador_today) ~ 'Nueva Posicion Vacante',
+        status_today == 'I' & is.na(id_colaborador_previous) ~ 'Posicion Inactivada Vacante',
+        status_today == 'I' & !is.na(id_colaborador_previous) ~ 'Posicion Inactivada Ocupada',
+        !is.na(id_colaborador_previous) & is.na(id_colaborador_today) ~ 'Posicion Vacante',
+        status_today == "I" ~ 'Sin Cambios - Posiciones Inactivas',
+        vacante_today == "True" ~ 'Sin Cambios - Posicion Activa Vacante',
+        TRUE ~ 'Sin Cambios - Posicion Activa Ocupada'
+      )
+    ) %>%
+    select(fecha_daily_today = fecha_daily_today, Cambios) %>%
+    group_by(fecha_daily_today, Cambios) %>%
+    summarise(Total_Posiciones = n(), .groups = "drop")
+  
+  # Añadir el resultado a la lista
+  result_list[[length(result_list) + 1]] <- comparison
+}
 
 # Cerrar conexión a la base de datos
 dbDisconnect(conn)
 
-# Paso 2: Procesar los datos en R (si es necesario)
-# Convertir la columna fecha a Date
-data <- data %>%
-  mutate(fecha = as.Date(ifelse(is.na(id_colaborador_current), "2024-12-31", "2025-01-31")))
+# Unir todos los resultados
+final_result <- bind_rows(result_list)
 
-# Agrupar y contar los cambios por fecha y tipo de cambio
-status_summary <- data %>%
-  group_by(fecha, Cambios) %>%
-  summarise(Total_Posiciones = n(), .groups = "drop")
-
-# Paso 3: Guardar el resultado en un archivo de Excel
-output_path <- "C:/Users/racl26345/Downloads/reporte_status.xlsx"
+# Paso 2: Guardar el resultado en un archivo de Excel
+output_path <- "C:/Users/racl26345/Downloads/reporte_comparativo_posiciones.xlsx"
 
 # Guardar el resultado en un archivo de Excel
-write.xlsx(status_summary, output_path)
+write.xlsx(final_result, output_path)
 
 # Mensaje de confirmación
 cat("✅ El archivo ha sido guardado en:", output_path, "\n")
