@@ -1,61 +1,13 @@
 # Cargar librerías necesarias
-library(readxl)
 library(DBI)
 library(RSQLite)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(shiny)
+library(DT)
 
-# Ruta del archivo de entrada y base de datos SQLite
-db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
-archivo_excel <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/Hist_Movimientos.xlsx"
-
-# Leer el archivo XLSX ignorando la primera fila (títulos de columnas)
-datos <- read_excel(archivo_excel, skip = 1, col_names = FALSE)
-
-# Definir las columnas a formatear como fechas (5, 6, 14, 18, 19, 20, 28, 64)
-columnas_fecha <- c(5, 6, 14, 18, 19, 20, 28, 64)
-
-# Convertir las columnas seleccionadas a formato de fecha "YYYY-MM-DD"
-for (col in columnas_fecha) {
-  datos[[col]] <- format(as.Date(datos[[col]], origin = "1899-12-30"), "%Y-%m-%d")
-}
-
-# Conectar a la base de datos SQLite
-conn <- dbConnect(SQLite(), db_path)
-
-# Definir las columnas de la tabla de base de datos
-columnas_db <- c(
-  "id_colaborador", "nombre", "evento_asociado", "razon_evento", "fecha_efectiva_movimiento",
-  "fecha_vencimiento_contrato", "puesto_anterior", "trans_sequence_mov_dia", "movimiento_creado_por",
-  "evento_asociado_etiqueta", "area_personal", "dias_laborales_por_semana", "familia_puestos",
-  "fecha_entrada_posicion", "nivel_escala_remuneracion", "etiqueta_plan_horario", "tabulador_salarial",
-  "fecha_original_contratacion", "fecha_baja", "fecha_ultimo_dia_laborado", "causa_baja", "motivo_baja",
-  "detalle_baja", "id_posicion", "posicion_tipo", "posicion_regional", "posicion_plaza",
-  "posicion_fecha_vacante", "posicion_comunidad_estrategia", "posicion_motivo", "posicion_motivo_especifico",
-  "posiciondepartamento", "posicion_centro_costos", "posicion_estado", "posicion_localidad", "posicion_division",
-  "posicion_municipio", "posicion_ubicacion", "posicion_puesto", "id_centro_costos", "nivel_gestion",
-  "nivel_1", "nivel_2", "nivel_3", "tipo_contrato", "nombre_puesto", "tipo_reclutamiento", "area_cobranza",
-  "puesto_generico", "area_especialidad_deseada", "clasificacion_riesgo", "clasificacion_liderazgo",
-  "disponibilidad_viajar", "escolaridad_deseada", "grupo_personal", "limitante", "modalidad_puesto",
-  "perfil_profesional", "pruebas_psicometricas", "segmento_puesto", "genero", "estado_civil", "estado_nacimiento",
-  "fecha_nacimiento", "lengua_nativa", "limitante_fisica", "nacionalidad", "pais_nacimiento",
-  "segunda_nacionalidad"
-)
-
-# Renombrar las columnas de los datos para que coincidan con la tabla de SQLite
-colnames(datos) <- columnas_db
-
-# Insertar los datos en la tabla hist_movimientos
-dbWriteTable(conn, "hist_movimientos", datos, append = TRUE, row.names = FALSE)
-
-# Cerrar la conexión
-dbDisconnect(conn)
-
-print("Datos insertados en la tabla hist_movimientos correctamente.")
-######################################################################################################################################
-
-# Cargar librerías necesarias
-library(DBI)
-library(RSQLite)
-library(writexl)  # Para guardar en Excel
+# --- PASO 1: Extraer y procesar los datos desde SQLite ---
 
 # Ruta de la base de datos SQLite
 db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
@@ -63,26 +15,155 @@ db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
 # Conectar a la base de datos SQLite
 conn <- dbConnect(SQLite(), db_path)
 
-# Definir la consulta SQL
-query <- "
-SELECT *
-FROM hist_posiciones
-WHERE hist_posiciones.fecha_daily = '2025-01-23'
-;
-"
-
-# Ejecutar la consulta y guardar el resultado en un data frame
-df <- dbGetQuery(conn, query)
+# Extraer los datos necesarios de la tabla hist_posiciones
+hist_posiciones <- dbGetQuery(conn, "
+    SELECT 
+        id_posicion, 
+        id_colaborador, 
+        status, 
+        area_de_cobranza, 
+        nivel_gestion, 
+        vacante, 
+        fecha_daily, 
+        fecha_inicio
+    FROM hist_posiciones
+    WHERE DATE(fecha_daily) BETWEEN '2025-01-01' AND '2025-01-24'
+")
 
 # Cerrar la conexión
 dbDisconnect(conn)
 
-# Ruta para guardar el archivo de Excel
-output_path <- "C:/Users/racl26345/Downloads/hist_posiciones.xlsx"
+# Convertir fechas a formato Date
+hist_posiciones <- hist_posiciones %>%
+  mutate(
+    fecha_daily = as.Date(fecha_daily),
+    fecha_inicio = as.Date(fecha_inicio)
+  )
 
-# Guardar el DataFrame en un archivo de Excel
-write_xlsx(df, output_path)
+# Crear una secuencia de fechas para el mes de enero
+fechas <- seq(as.Date("2025-01-01"), as.Date("2025-01-24"), by = "day")
 
-# Mensaje de confirmación
-cat("Exportación completada. Archivo guardado en:", output_path, "\n")
+# Función para comparar dos días consecutivos
+comparar_dias <- function(fecha_actual, fecha_anterior, datos) {
+  # Filtrar datos para el día actual y el día anterior
+  hoy <- datos %>% filter(fecha_daily == fecha_actual)
+  ayer <- datos %>% filter(fecha_daily == fecha_anterior)
+  
+  # Identificar posiciones inactivas
+  down_positions <- datos %>%
+    filter(status == 'I' & fecha_inicio <= fecha_actual) %>%
+    pull(id_posicion) %>%
+    unique()
+  
+  # Filtrar posiciones activas
+  hoy <- hoy %>% filter(!id_posicion %in% down_positions)
+  ayer <- ayer %>% filter(!id_posicion %in% down_positions)
+  
+  # Realizar las comparaciones
+  comparacion <- hoy %>%
+    left_join(ayer, by = "id_posicion", suffix = c("_hoy", "_ayer")) %>%
+    mutate(
+      nivel_gestion = case_when(
+        area_de_cobranza_hoy == 'Cobranza administrativa' ~ 'COBRANZA',
+        area_de_cobranza_hoy == 'Cobranza en campo' ~ 'COBRANZA',
+        TRUE ~ nivel_gestion_hoy
+      ),
+      Cambios = case_when(
+        status_hoy == 'I' & status_ayer == 'A' ~ 'Posicion Inactivada',
+        is.na(status_ayer) & status_hoy == 'A' ~ 'Posicion Creada',
+        status_hoy == 'A' & is.na(id_colaborador_hoy) & !is.na(id_colaborador_ayer) ~ 'Posicion Vacante',
+        status_hoy == 'A' & !is.na(id_colaborador_hoy) & is.na(id_colaborador_ayer) ~ 'Posicion Cubierta',
+        status_hoy == 'I' ~ 'Sin Cambios - Posiciones Inactivas',
+        vacante_hoy == 'True' ~ 'Sin Cambios - Posicion Activa Vacante',
+        TRUE ~ 'Sin Cambios - Posicion Activa Ocupada'
+      )
+    ) %>%
+    select(fecha = fecha_daily_hoy, id_posicion, nivel_gestion, Cambios)
+  
+  return(comparacion)
+}
 
+# Aplicar la función a todas las fechas
+resultados <- lapply(fechas[-1], function(fecha) {
+  comparar_dias(fecha, fecha - 1, hist_posiciones)
+}) %>% bind_rows()
+
+# Resumir los resultados por fecha, nivel_gestion y Cambios
+resumen <- resultados %>%
+  group_by(fecha, nivel_gestion, Cambios) %>%
+  summarise(Total_Posiciones = n(), .groups = 'drop')
+
+# --- PASO 2: Crear el Dashboard Interactivo con Shiny ---
+
+# Definir la interfaz de usuario (UI)
+ui <- fluidPage(
+  titlePanel("Evolución Diaria de Posiciones en la Compañía"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      # Filtro por Nivel de Gestión
+      selectInput("nivel_gestion", "Seleccionar Nivel de Gestión:",
+                  choices = unique(resumen$nivel_gestion),
+                  multiple = TRUE,
+                  selected = unique(resumen$nivel_gestion)),
+      
+      # Filtro por Cambios
+      selectInput("cambios", "Seleccionar Cambios:",
+                  choices = unique(resumen$Cambios),
+                  multiple = TRUE,
+                  selected = unique(resumen$Cambios)),
+      
+      # Botón para actualizar los filtros
+      actionButton("actualizar", "Aplicar Filtros")
+    ),
+    
+    mainPanel(
+      # Gráfico de evolución diaria
+      plotOutput("grafico"),
+      
+      # Tabla dinámica
+      DTOutput("tabla")
+    )
+  )
+)
+
+# Definir el servidor (Server)
+server <- function(input, output) {
+  # Filtrar los datos según los filtros seleccionados
+  datos_filtrados <- reactive({
+    resumen %>%
+      filter(nivel_gestion %in% input$nivel_gestion &
+               Cambios %in% input$cambios)
+  })
+  
+  # Gráfico de evolución diaria
+  output$grafico <- renderPlot({
+    datos_filtrados() %>%
+      ggplot(aes(x = fecha, y = Total_Posiciones, color = Cambios, group = Cambios)) +
+      geom_line(size = 1) +
+      geom_point(size = 3) +
+      facet_wrap(~ nivel_gestion, scales = "free_y") +
+      labs(title = "Evolución Diaria de Posiciones",
+           x = "Fecha",
+           y = "Número de Posiciones",
+           color = "Cambios") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  })
+  
+  # Tabla dinámica
+  output$tabla <- renderDT({
+    datos_filtrados() %>%
+      pivot_wider(names_from = fecha, values_from = Total_Posiciones, values_fill = list(Total_Posiciones = 0)) %>%
+      datatable(rownames = FALSE,
+                extensions = 'Buttons',
+                options = list(
+                  dom = 'Bfrtip',
+                  buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+                  pageLength = 10
+                ))
+  })
+}
+
+# Ejecutar la aplicación Shiny
+shinyApp(ui = ui, server = server)

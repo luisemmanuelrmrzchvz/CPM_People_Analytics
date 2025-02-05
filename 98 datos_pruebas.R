@@ -1,57 +1,128 @@
-tengo el siguiente script en R, para alimentar una tabla en SQLite, aunque necesito ajustar el script de R, para antes de insertar los datos del archivo, valide si el registro de mi columna 1 de mi archivo, ya existe en la tabla de mi base de SQLite, si es el caso necesito que sustituya el campos de mi registro de la tabla, por los nuevos campos de mi registro en el arcchivo de xlsx, adicionalmente me imprima en la consola de R, los registros que identificó que ya existían, y por cuál registro los sustituyo, a modo de visualización del ajuste en la tabla; la tabla que tengo en SQLite la cree como: "CREATE TABLE incidencias (
-    id_key INTEGER PRIMARY KEY AUTOINCREMENT,
-    id_incidencia TEXT,
-    creada_por INTEGER,
-    fecha_creacion DATE,
-    id_workflow_request INTEGER,
-    categoria_ausentismo TEXT,
-    tipo_ausencia TEXT,
-    motivo_permiso TEXT,
-    tramite_personal TEXT,
-    dias_ausencia INTEGER,
-    fecha_inicio DATE,
-    fecha_fin DATE,
-    id_colaborador INTEGER,
-    folio_imss TEXT,
-    ultima_modificacion_por INTEGER,
-    fecha_ultima_modificacion DATE,
-    status_incidencia TEXT
-);"; y el script que necesito ajustar de R es: "# Cargar librerías necesarias
-library(readxl)
-library(dplyr)
-library(DBI)
-library(RSQLite)
+WITH RECURSIVE dates AS (
+  SELECT DATE('2025-01-01') AS fecha
+  UNION ALL
+  SELECT DATE(fecha, '+1 day')
+  FROM dates
+  WHERE fecha < DATE('2025-01-31')
+),
 
-# Ruta del archivo de entrada y base de datos SQLite
+down_positions AS (
+  SELECT hist_posiciones.id_posicion
+  FROM hist_posiciones
+  WHERE (hist_posiciones.status = 'I' AND DATE(hist_posiciones.fecha_inicio) <= '2025-01-31')
+),
+
+daily_comparison AS (
+  SELECT 
+  d.fecha,
+  yesterday.id_posicion AS yesterday_id_posicion,
+  yesterday.id_colaborador AS yesterday_id_colaborador,
+  yesterday.status AS yesterday_status,
+  today.id_posicion AS today_id_posicion,
+  today.id_colaborador AS today_id_colaborador,
+  today.status AS today_status,
+  today.area_de_cobranza,
+  today.nivel_gestion,
+  today.vacante
+  FROM dates d
+  LEFT JOIN hist_posiciones yesterday 
+  ON DATE(yesterday.fecha_daily) = DATE(d.fecha, '-1 day')
+  AND yesterday.id_posicion NOT IN (SELECT id_posicion FROM down_positions)
+  LEFT JOIN hist_posiciones today 
+  ON DATE(today.fecha_daily) = d.fecha
+  AND today.id_posicion NOT IN (SELECT id_posicion FROM down_positions)
+),
+
+inactivations AS (
+  SELECT 
+  fecha,
+  today_id_posicion AS id_posicion
+  FROM daily_comparison
+  WHERE today_status = 'I'
+  AND yesterday_status = 'A'
+),
+
+news AS (
+  SELECT 
+  fecha,
+  today_id_posicion AS id_posicion
+  FROM daily_comparison
+  WHERE today_id_posicion NOT IN (SELECT yesterday_id_posicion FROM daily_comparison WHERE fecha = daily_comparison.fecha)
+  AND today_status = 'A'
+),
+
+transfers AS (
+  SELECT 
+  fecha,
+  today_id_posicion AS id_posicion,
+  today_id_colaborador,
+  yesterday_id_colaborador
+  FROM daily_comparison
+  WHERE today_status = 'A'
+  AND (today_id_colaborador IS NOT NULL AND yesterday_id_colaborador IS NOT NULL)
+  AND today_id_colaborador <> yesterday_id_colaborador
+),
+
+termination AS (
+  SELECT 
+  fecha,
+  today_id_posicion AS id_posicion,
+  today_id_colaborador,
+  yesterday_id_colaborador
+  FROM daily_comparison
+  WHERE today_status = 'A'
+  AND (today_id_colaborador IS NULL AND yesterday_id_colaborador IS NOT NULL)
+),
+
+hires AS (
+  SELECT 
+  fecha,
+  today_id_posicion AS id_posicion,
+  today_id_colaborador,
+  yesterday_id_colaborador
+  FROM daily_comparison
+  WHERE today_status = 'A'
+  AND (today_id_colaborador IS NOT NULL AND yesterday_id_colaborador IS NULL)
+),
+
+status AS (
+  SELECT
+  dc.fecha,
+  dc.today_id_posicion AS id_posicion,
+  dc.today_id_colaborador,
+  CASE WHEN dc.area_de_cobranza = 'Cobranza administrativa' THEN 'COBRANZA'
+  WHEN dc.area_de_cobranza = 'Cobranza en campo' THEN 'COBRANZA'
+  ELSE dc.nivel_gestion END AS nivel_gestion,
+  CASE WHEN dc.today_id_posicion IN (SELECT id_posicion FROM inactivations WHERE fecha = dc.fecha) THEN 'Posicion Inactivada'
+  WHEN dc.today_id_posicion IN (SELECT id_posicion FROM news WHERE fecha = dc.fecha) THEN 'Posicion Creada'
+  WHEN dc.today_id_posicion IN (SELECT id_posicion FROM termination WHERE fecha = dc.fecha) THEN 'Posicion Vacante'
+  WHEN dc.today_id_posicion IN (SELECT id_posicion FROM hires WHERE fecha = dc.fecha) THEN 'Posicion Cubierta'
+  WHEN dc.today_status = 'I' THEN 'Sin Cambios - Posiciones Inactivas'
+  WHEN dc.vacante = 'True' THEN 'Sin Cambios - Posicion Activa Vacante'   
+  ELSE 'Sin Cambios - Posicion Activa Ocupada' END AS Cambios
+  FROM daily_comparison dc
+)
+
+SELECT
+s.fecha,
+s.nivel_gestion,
+s.Cambios,
+COUNT(s.id_posicion) AS Total_Posiciones
+FROM status s
+GROUP BY s.fecha, s.nivel_gestion, s.Cambios
+ORDER BY s.fecha, s.nivel_gestion, s.Cambios;
+
+
+
+
+# Ruta de la base de datos SQLite
 db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
-archivo_excel <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/Incidencias.xlsx"
-
-# Leer el archivo XLSX ignorando la primera fila (títulos de columnas)
-datos <- read_excel(archivo_excel, skip = 1, col_names = FALSE)
-
-# Definir las columnas a formatear como fechas (3, 10, 11, 15)
-columnas_fecha <- c(3, 10, 11, 15)
-
-# Convertir las columnas seleccionadas a formato de fecha "YYYY-MM-DD"
-for (col in columnas_fecha) {
-  datos[[col]] <- format(as.Date(datos[[col]], origin = "1899-12-30"), "%Y-%m-%d")
-}
 
 # Conectar a la base de datos SQLite
 conn <- dbConnect(SQLite(), db_path)
 
-# Obtener los nombres de las columnas de la base de datos (sin incluir id_key)
-columnas_db <- dbListFields(conn, "incidencias")
-columnas_db <- columnas_db[columnas_db != "id_key"]
 
-# Renombrar las columnas para coincidir con la base de datos
-colnames(datos) <- columnas_db
 
-# Insertar los datos en la tabla incidencias
-dbWriteTable(conn, "incidencias", datos, append = TRUE, row.names = FALSE)
 
-# Cerrar la conexión
-dbDisconnect(conn)
 
-print("Datos insertados en la base de datos correctamente.")
-"; cabe hacer mención, que las columnas de DATE, necesito que las lea y guarde como "YYYY-MM-DD", dado que es una tabla de SQLite, y hago la conversión en R, dado que mi archivo de excel en las columnas 3 y 15 tienen formato "DD/MM/YYYY hh:mm:ss a.m." y las 10 y 11 tienen formato "DD/MM/YYYY", por eso hago las conversiones de fechas
+"C:/Users/racl26345/Downloads"
