@@ -1,13 +1,10 @@
-# Instalar paquetes si no están instalados
-install.packages(c("DBI", "RSQLite", "dplyr", "openxlsx"))
-
 # Cargar librerías necesarias
 library(DBI)
 library(RSQLite)
 library(dplyr)
 library(openxlsx)
 
-# 📌 Paso 1: Conectar a la base de datos SQLite y extraer datos en bruto
+# Paso 1: Conectar a la base de datos SQLite y extraer datos en bruto
 db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
 
 # Conectar a la base de datos
@@ -33,7 +30,7 @@ data <- dbGetQuery(conn, query)
 # Cerrar conexión a la base de datos
 dbDisconnect(conn)
 
-# 📌 Paso 2: Procesar los datos en R
+# Paso 2: Procesar los datos en R
 # Convertir la columna fecha_daily a formato Date
 data <- data %>%
   mutate(fecha_daily = as.Date(fecha_daily))
@@ -50,11 +47,12 @@ daily_comparison <- data %>%
 status <- daily_comparison %>%
   mutate(
     Cambios = case_when(
-      status_today == 'I' & status_yesterday == 'A' ~ 'Posicion Inactivada',
+      status_today == 'I' & status_yesterday == 'A' & is.na(id_colaborador_yesterday) ~ 'Posicion Inactivada Vacante',
+      status_today == 'I' & status_yesterday == 'A'& !is.na(id_colaborador_yesterday) ~ 'Posicion Inactivada Ocupada',
       is.na(id_colaborador_yesterday) & !is.na(id_colaborador_today) ~ 'Posicion Cubierta',
       !is.na(id_colaborador_yesterday) & is.na(id_colaborador_today) ~ 'Posicion Vacante',
-      vacante_today == "True" ~ 'Sin Cambios - Posicion Activa Vacante',
       status_today == "I" ~ 'Sin Cambios - Posiciones Inactivas',
+      vacante_today == "True" ~ 'Sin Cambios - Posicion Activa Vacante',
       TRUE ~ 'Sin Cambios - Posicion Activa Ocupada'
     )
   ) %>%
@@ -62,11 +60,11 @@ status <- daily_comparison %>%
   summarise(Total_Posiciones = n(), .groups = "drop") %>%
   rename(fecha = fecha_daily_today, nivel_gestion = nivel_gestion_today)
 
-# 📌 Paso 3: Guardar el resultado en un archivo de Excel
+# Paso 3: Guardar el resultado en un archivo de Excel
 output_path <- "C:/Users/racl26345/Downloads/reporte_status.xlsx"
 
 # Guardar el resultado en un archivo de Excel
 write.xlsx(status, output_path)
 
 # Mensaje de confirmación
-cat("✅ El archivo ha sido guardado en:", output_path, "\n")
+cat("El archivo ha sido guardado en:", output_path, "\n")
