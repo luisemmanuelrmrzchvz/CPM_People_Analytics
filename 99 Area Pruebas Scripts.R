@@ -1,13 +1,7 @@
-# Cargar librerías necesarias
+# Cargar librerías
 library(DBI)
 library(RSQLite)
-library(dplyr)
-library(tidyr)
-library(ggplot2)
-library(shiny)
-library(DT)
-
-# --- PASO 1: Extraer y procesar los datos desde SQLite ---
+library(writexl)
 
 # Ruta de la base de datos SQLite
 db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
@@ -15,155 +9,134 @@ db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
 # Conectar a la base de datos SQLite
 conn <- dbConnect(SQLite(), db_path)
 
-# Extraer los datos necesarios de la tabla hist_posiciones
-hist_posiciones <- dbGetQuery(conn, "
-    SELECT 
-        id_posicion, 
-        id_colaborador, 
-        status, 
-        area_de_cobranza, 
-        nivel_gestion, 
-        vacante, 
-        fecha_daily, 
-        fecha_inicio
-    FROM hist_posiciones
-    WHERE DATE(fecha_daily) BETWEEN '2025-01-01' AND '2025-01-24'
-")
+# Query adaptado a R
+query <- "
+WITH RECURSIVE dates AS (
+  SELECT DATE('2025-01-01') AS fecha
+  UNION ALL
+  SELECT DATE(fecha, '+1 day')
+  FROM dates
+  WHERE fecha < DATE('2025-01-31')
+),
 
-# Cerrar la conexión
-dbDisconnect(conn)
+down_positions AS (
+  SELECT hist_posiciones.id_posicion
+  FROM hist_posiciones
+  WHERE (hist_posiciones.status = 'I' AND DATE(hist_posiciones.fecha_inicio) <= '2025-01-31')
+),
 
-# Convertir fechas a formato Date
-hist_posiciones <- hist_posiciones %>%
-  mutate(
-    fecha_daily = as.Date(fecha_daily),
-    fecha_inicio = as.Date(fecha_inicio)
-  )
+daily_comparison AS (
+  SELECT 
+  d.fecha,
+  yesterday.id_posicion AS yesterday_id_posicion,
+  yesterday.id_colaborador AS yesterday_id_colaborador,
+  yesterday.status AS yesterday_status,
+  today.id_posicion AS today_id_posicion,
+  today.id_colaborador AS today_id_colaborador,
+  today.status AS today_status,
+  today.area_de_cobranza,
+  today.nivel_gestion,
+  today.vacante
+  FROM dates d
+  LEFT JOIN hist_posiciones yesterday 
+  ON DATE(yesterday.fecha_daily) = DATE(d.fecha, '-1 day')
+  AND yesterday.id_posicion NOT IN (SELECT id_posicion FROM down_positions)
+  LEFT JOIN hist_posiciones today 
+  ON DATE(today.fecha_daily) = d.fecha
+  AND today.id_posicion NOT IN (SELECT id_posicion FROM down_positions)
+),
 
-# Crear una secuencia de fechas para el mes de enero
-fechas <- seq(as.Date("2025-01-01"), as.Date("2025-01-24"), by = "day")
+inactivations AS (
+  SELECT 
+  fecha,
+  today_id_posicion AS id_posicion
+  FROM daily_comparison
+  WHERE today_status = 'I'
+  AND yesterday_status = 'A'
+),
 
-# Función para comparar dos días consecutivos
-comparar_dias <- function(fecha_actual, fecha_anterior, datos) {
-  # Filtrar datos para el día actual y el día anterior
-  hoy <- datos %>% filter(fecha_daily == fecha_actual)
-  ayer <- datos %>% filter(fecha_daily == fecha_anterior)
-  
-  # Identificar posiciones inactivas
-  down_positions <- datos %>%
-    filter(status == 'I' & fecha_inicio <= fecha_actual) %>%
-    pull(id_posicion) %>%
-    unique()
-  
-  # Filtrar posiciones activas
-  hoy <- hoy %>% filter(!id_posicion %in% down_positions)
-  ayer <- ayer %>% filter(!id_posicion %in% down_positions)
-  
-  # Realizar las comparaciones
-  comparacion <- hoy %>%
-    left_join(ayer, by = "id_posicion", suffix = c("_hoy", "_ayer")) %>%
-    mutate(
-      nivel_gestion = case_when(
-        area_de_cobranza_hoy == 'Cobranza administrativa' ~ 'COBRANZA',
-        area_de_cobranza_hoy == 'Cobranza en campo' ~ 'COBRANZA',
-        TRUE ~ nivel_gestion_hoy
-      ),
-      Cambios = case_when(
-        status_hoy == 'I' & status_ayer == 'A' ~ 'Posicion Inactivada',
-        is.na(status_ayer) & status_hoy == 'A' ~ 'Posicion Creada',
-        status_hoy == 'A' & is.na(id_colaborador_hoy) & !is.na(id_colaborador_ayer) ~ 'Posicion Vacante',
-        status_hoy == 'A' & !is.na(id_colaborador_hoy) & is.na(id_colaborador_ayer) ~ 'Posicion Cubierta',
-        status_hoy == 'I' ~ 'Sin Cambios - Posiciones Inactivas',
-        vacante_hoy == 'True' ~ 'Sin Cambios - Posicion Activa Vacante',
-        TRUE ~ 'Sin Cambios - Posicion Activa Ocupada'
-      )
-    ) %>%
-    select(fecha = fecha_daily_hoy, id_posicion, nivel_gestion, Cambios)
-  
-  return(comparacion)
-}
+news AS (
+  SELECT 
+  fecha,
+  today_id_posicion AS id_posicion
+  FROM daily_comparison
+  WHERE today_id_posicion NOT IN (SELECT yesterday_id_posicion FROM daily_comparison WHERE fecha = daily_comparison.fecha)
+  AND today_status = 'A'
+),
 
-# Aplicar la función a todas las fechas
-resultados <- lapply(fechas[-1], function(fecha) {
-  comparar_dias(fecha, fecha - 1, hist_posiciones)
-}) %>% bind_rows()
+transfers AS (
+  SELECT 
+  fecha,
+  today_id_posicion AS id_posicion,
+  today_id_colaborador,
+  yesterday_id_colaborador
+  FROM daily_comparison
+  WHERE today_status = 'A'
+  AND (today_id_colaborador IS NOT NULL AND yesterday_id_colaborador IS NOT NULL)
+  AND today_id_colaborador <> yesterday_id_colaborador
+),
 
-# Resumir los resultados por fecha, nivel_gestion y Cambios
-resumen <- resultados %>%
-  group_by(fecha, nivel_gestion, Cambios) %>%
-  summarise(Total_Posiciones = n(), .groups = 'drop')
+termination AS (
+  SELECT 
+  fecha,
+  today_id_posicion AS id_posicion,
+  today_id_colaborador,
+  yesterday_id_colaborador
+  FROM daily_comparison
+  WHERE today_status = 'A'
+  AND (today_id_colaborador IS NULL AND yesterday_id_colaborador IS NOT NULL)
+),
 
-# --- PASO 2: Crear el Dashboard Interactivo con Shiny ---
+hires AS (
+  SELECT 
+  fecha,
+  today_id_posicion AS id_posicion,
+  today_id_colaborador,
+  yesterday_id_colaborador
+  FROM daily_comparison
+  WHERE today_status = 'A'
+  AND (today_id_colaborador IS NOT NULL AND yesterday_id_colaborador IS NULL)
+),
 
-# Definir la interfaz de usuario (UI)
-ui <- fluidPage(
-  titlePanel("Evolución Diaria de Posiciones en la Compañía"),
-  
-  sidebarLayout(
-    sidebarPanel(
-      # Filtro por Nivel de Gestión
-      selectInput("nivel_gestion", "Seleccionar Nivel de Gestión:",
-                  choices = unique(resumen$nivel_gestion),
-                  multiple = TRUE,
-                  selected = unique(resumen$nivel_gestion)),
-      
-      # Filtro por Cambios
-      selectInput("cambios", "Seleccionar Cambios:",
-                  choices = unique(resumen$Cambios),
-                  multiple = TRUE,
-                  selected = unique(resumen$Cambios)),
-      
-      # Botón para actualizar los filtros
-      actionButton("actualizar", "Aplicar Filtros")
-    ),
-    
-    mainPanel(
-      # Gráfico de evolución diaria
-      plotOutput("grafico"),
-      
-      # Tabla dinámica
-      DTOutput("tabla")
-    )
-  )
+status AS (
+  SELECT
+  dc.fecha,
+  dc.today_id_posicion AS id_posicion,
+  dc.today_id_colaborador,
+  CASE WHEN dc.area_de_cobranza = 'Cobranza administrativa' THEN 'COBRANZA'
+  WHEN dc.area_de_cobranza = 'Cobranza en campo' THEN 'COBRANZA'
+  ELSE dc.nivel_gestion END AS nivel_gestion,
+  CASE WHEN dc.today_id_posicion IN (SELECT id_posicion FROM inactivations WHERE fecha = dc.fecha) THEN 'Posicion Inactivada'
+  WHEN dc.today_id_posicion IN (SELECT id_posicion FROM news WHERE fecha = dc.fecha) THEN 'Posicion Creada'
+  WHEN dc.today_id_posicion IN (SELECT id_posicion FROM termination WHERE fecha = dc.fecha) THEN 'Posicion Vacante'
+  WHEN dc.today_id_posicion IN (SELECT id_posicion FROM hires WHERE fecha = dc.fecha) THEN 'Posicion Cubierta'
+  WHEN dc.today_status = 'I' THEN 'Sin Cambios - Posiciones Inactivas'
+  WHEN dc.vacante = 'True' THEN 'Sin Cambios - Posicion Activa Vacante'   
+  ELSE 'Sin Cambios - Posicion Activa Ocupada' END AS Cambios
+  FROM daily_comparison dc
 )
 
-# Definir el servidor (Server)
-server <- function(input, output) {
-  # Filtrar los datos según los filtros seleccionados
-  datos_filtrados <- reactive({
-    resumen %>%
-      filter(nivel_gestion %in% input$nivel_gestion &
-               Cambios %in% input$cambios)
-  })
-  
-  # Gráfico de evolución diaria
-  output$grafico <- renderPlot({
-    datos_filtrados() %>%
-      ggplot(aes(x = fecha, y = Total_Posiciones, color = Cambios, group = Cambios)) +
-      geom_line(size = 1) +
-      geom_point(size = 3) +
-      facet_wrap(~ nivel_gestion, scales = "free_y") +
-      labs(title = "Evolución Diaria de Posiciones",
-           x = "Fecha",
-           y = "Número de Posiciones",
-           color = "Cambios") +
-      theme_minimal() +
-      theme(axis.text.x = element_text(angle = 45, hjust = 1))
-  })
-  
-  # Tabla dinámica
-  output$tabla <- renderDT({
-    datos_filtrados() %>%
-      pivot_wider(names_from = fecha, values_from = Total_Posiciones, values_fill = list(Total_Posiciones = 0)) %>%
-      datatable(rownames = FALSE,
-                extensions = 'Buttons',
-                options = list(
-                  dom = 'Bfrtip',
-                  buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
-                  pageLength = 10
-                ))
-  })
-}
+SELECT
+s.fecha,
+s.nivel_gestion,
+s.Cambios,
+COUNT(s.id_posicion) AS Total_Posiciones
+FROM status s
+GROUP BY s.fecha, s.nivel_gestion, s.Cambios
+ORDER BY s.fecha, s.nivel_gestion, s.Cambios;
+"
 
-# Ejecutar la aplicación Shiny
-shinyApp(ui = ui, server = server)
+# Ejecutar el query y guardar resultados en un dataframe
+resultados <- dbGetQuery(conn, query)
+
+# Cerrar conexión a la base de datos
+dbDisconnect(conn)
+
+# Ruta para guardar el archivo Excel
+output_path <- "C:/Users/racl26345/Downloads/resultado_query.xlsx"
+
+# Guardar resultados en Excel
+write_xlsx(resultados, output_path)
+
+# Mensaje de confirmación
+cat("El archivo se ha guardado en:", output_path, "\n")
