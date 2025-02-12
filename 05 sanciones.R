@@ -11,8 +11,8 @@ ruta_archivo <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/Sanc
 db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
 
 # Fechas de inicio y fin para la selección de registros
-fecha_inicio <- as.Date("2025-01-24")
-fecha_fin <- as.Date("2025-01-24")
+fecha_inicio <- as.Date("2025-01-25")
+fecha_fin <- as.Date("2025-01-31")
 
 # Leer el archivo Excel, omitiendo la primera fila de títulos
 datos <- read_excel(ruta_archivo, skip = 1, col_names = FALSE)
