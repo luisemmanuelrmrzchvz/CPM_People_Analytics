@@ -35,9 +35,9 @@ datos <- datos %>%
 datos <- datos %>%
   mutate(id_catalog = gsub("[^0-9]", "", id_catalog))  # Eliminar todo excepto los números
 
-# Filtrar los registros donde id_catalog sea un INTEGER de 10 dígitos
+# Filtrar los registros donde id_catalog sea un INTEGER de 10 dígitos y comience con 1 o 2
 datos <- datos %>%
-  filter(grepl("^\\d{10}$", id_catalog))  # Ajustado para 10 dígitos
+  filter(grepl("^\\d{10}$", id_catalog) & grepl("^[12]", id_catalog))  # Ajustado para 10 dígitos y que comience con 1 o 2
 
 # Verificar los datos después del filtrado
 print("Datos después del filtrado:")
