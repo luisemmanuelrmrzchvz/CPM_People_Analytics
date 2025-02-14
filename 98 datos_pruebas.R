@@ -38,6 +38,7 @@ print("Datos insertados en la base de datos correctamente.")
 ####################################################################################
 ####################################################################################
 
+
 library(readxl)       # Para leer archivos Excel
 library(tidyverse)    # Para manipulación de datos
 library(tm)           # Para procesamiento de texto
@@ -51,29 +52,25 @@ library(widyr)        # Para n-gramas
 # 1. Cargar el archivo Excel y renombrar la columna
 ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas abiertas.xlsx"
 df <- read_excel(ruta_archivo, col_names = FALSE)  # Leer sin nombres de columna
-colnames(df) <- c("Respuesta_Abierta")  # Asignar el nombre "Respuesta_Abierta"
+colnames(df) <- c("Respuesta_Abierta")             # Asignar el nombre "Respuesta_Abierta"
 
-# Eliminar filas vacías
-df <- df %>% filter(!is.na(Respuesta_Abierta) & Respuesta_Abierta != "")
+# Eliminar filas vacías y asignar un identificador de documento
+df <- df %>% 
+  filter(!is.na(Respuesta_Abierta) & Respuesta_Abierta != "") %>%
+  mutate(doc_id = row_number())
 
-# 2. Limpieza de datos
+# 2. Limpieza de datos y tokenización
 df_limpio <- df %>%
-  mutate(Respuesta_Abierta = tolower(Respuesta_Abierta), # Convertir a minúsculas
-         Respuesta_Abierta = removePunctuation(Respuesta_Abierta), # Eliminar puntuación
-         Respuesta_Abierta = removeNumbers(Respuesta_Abierta), # Eliminar números
-         Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>% # Eliminar espacios extra
-  unnest_tokens(word, Respuesta_Abierta) %>%
-  filter(!word %in% stopwords("es")) # Eliminar stopwords en español
+  mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),                  # Convertir a minúsculas
+         Respuesta_Abierta = removePunctuation(Respuesta_Abierta),          # Eliminar puntuación
+         Respuesta_Abierta = removeNumbers(Respuesta_Abierta),              # Eliminar números
+         Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>%        # Eliminar espacios extra
+  unnest_tokens(word, Respuesta_Abierta) %>%                                # Tokenizar
+  filter(!word %in% stopwords("es")) %>%                                    # Eliminar stopwords en español
+  mutate(word = lemmatize_strings(word, language = "es"))                   # Lematización
 
-# 3. Lematización
-df_limpio <- df_limpio %>%
-  mutate(word = lemmatize_strings(word, language = "es"))
-
-# 4. Análisis exploratorio: Palabras más comunes
-word_counts <- df_limpio %>%
-  count(word, sort = TRUE)
-
-# Ver las 10 palabras más comunes
+# 3. Análisis exploratorio: Palabras más comunes
+word_counts <- df_limpio %>% count(word, sort = TRUE)
 print(head(word_counts, 10))
 
 # Visualización de palabras más comunes
@@ -84,7 +81,7 @@ word_counts %>%
   coord_flip() +
   labs(title = "Palabras más comunes en respuestas abiertas", x = "Palabra", y = "Frecuencia")
 
-# 5. Bigramas
+# 4. Bigramas (frases de 2 palabras)
 bigramas <- df %>%
   unnest_tokens(bigrama, Respuesta_Abierta, token = "ngrams", n = 2) %>%
   separate(bigrama, into = c("palabra1", "palabra2"), sep = " ") %>%
@@ -101,10 +98,8 @@ bigramas %>%
   coord_flip() +
   labs(title = "Bigramas más comunes en respuestas abiertas", x = "Bigrama", y = "Frecuencia")
 
-# 6. Análisis de sentimientos
+# 5. Análisis de sentimientos
 sentimientos <- get_nrc_sentiment(df$Respuesta_Abierta, language = "spanish")
-
-# Resumir sentimientos
 summary_sentimientos <- colSums(sentimientos)
 print(summary_sentimientos)
 
@@ -115,16 +110,16 @@ tibble(sentimiento = names(summary_sentimientos), total = summary_sentimientos) 
   coord_flip() +
   labs(title = "Análisis de sentimientos", x = "Sentimiento", y = "Total")
 
-# 7. Modelado de tópicos (LDA)
-# Crear matriz de términos-documento (DTM)
+# 6. Modelado de tópicos (LDA)
+# Crear la matriz documento-término (DTM) usando el identificador 'doc_id'
 dtm <- df_limpio %>%
-  count(word, name = "freq") %>%
-  cast_dtm(document = 1, term = word, value = freq)
+  count(doc_id, word, sort = TRUE) %>%
+  cast_dtm(document = doc_id, term = word, value = n)
 
-# Ajustar modelo LDA con 5 tópicos
+# Ajustar un modelo LDA con 5 tópicos (ajustable según necesidad)
 lda_model <- LDA(dtm, k = 5, control = list(seed = 1234))
 
-# Ver los tópicos y palabras clave
+# Extraer los tópicos y las palabras clave
 topics <- tidy(lda_model, matrix = "beta")
 top_terms <- topics %>%
   group_by(topic) %>%
@@ -133,6 +128,7 @@ top_terms <- topics %>%
   arrange(topic, -beta)
 
 print(top_terms)
+
 
 
 ####################################################################################
