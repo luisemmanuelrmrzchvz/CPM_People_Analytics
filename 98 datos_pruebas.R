@@ -39,6 +39,7 @@ print("Datos insertados en la base de datos correctamente.")
 ####################################################################################
 
 
+
 # Cargar las librerías necesarias
 library(readxl)       # Para leer archivos Excel
 library(tidyverse)    # Para manipulación de datos
@@ -49,6 +50,9 @@ library(topicmodels)  # Para modelado de tópicos
 library(ggplot2)      # Para visualización
 library(textstem)     # Para lematización
 library(widyr)        # Para n-gramas
+library(writexl)      # Para exportar a Excel
+library(igraph)       # Para redes de bigramas
+library(ggraph)       # Para visualizar redes
 
 # 1. Cargar el archivo Excel y renombrar la columna
 ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas abiertas.xlsx"
@@ -89,22 +93,21 @@ word_counts %>%
         axis.title = element_text(size = 14))
 
 # 4. Bigramas (frases de 2 palabras)
+# Generamos bigramas a partir del df original aplicando una limpieza previa
 bigramas <- df %>%
-  # Se aplica una limpieza previa para formar correctamente los n-gramas
   mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),
          Respuesta_Abierta = removePunctuation(Respuesta_Abierta),
          Respuesta_Abierta = removeNumbers(Respuesta_Abierta),
          Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>%
   unnest_tokens(bigrama, Respuesta_Abierta, token = "ngrams", n = 2) %>%
   separate(bigrama, into = c("palabra1", "palabra2"), sep = " ") %>%
-  # Eliminar casos donde una de las dos palabras sea NA
   filter(!is.na(palabra1), !is.na(palabra2)) %>%
   filter(!palabra1 %in% stopwords("es"),
          !palabra2 %in% stopwords("es")) %>%
   unite(bigrama, palabra1, palabra2, sep = " ") %>%
   count(bigrama, sort = TRUE)
 
-# Visualización de todos los bigramas (gráfico mejorado)
+# Visualización de bigramas generales (gráfico mejorado)
 bigramas %>%
   filter(n > 20) %>%
   ggplot(aes(x = reorder(bigrama, n), y = n)) +
@@ -118,24 +121,36 @@ bigramas %>%
         axis.text = element_text(size = 12),
         axis.title = element_text(size = 14))
 
-# Adicional: Filtrar y visualizar bigramas potencialmente más informativos
-# Se excluyen combinaciones que contengan palabras muy genéricas
+# Bigramas informativos: red de bigramas
+# Separamos nuevamente los bigramas sin unir para crear la red
 palabras_genericas <- c("bien", "gracias", "informacion", "ninguna", "socio", "curso", "momento", "excelente", "comentarios", "ninguno")
-bigramas_filtrados <- bigramas %>%
-  filter(!str_detect(bigrama, paste(palabras_genericas, collapse = "|")))
 
-bigramas_filtrados %>%
-  filter(n > 10) %>%  # Puedes ajustar el umbral según convenga
-  ggplot(aes(x = reorder(bigrama, n), y = n)) +
-  geom_bar(stat = "identity", fill = "darkorange") +
-  coord_flip() +
-  labs(title = "Bigramas informativos en respuestas abiertas",
-       subtitle = "Frases compuestas que aportan mayor contexto",
-       x = "Bigrama", y = "Frecuencia") +
+bigram_separados <- df %>%
+  mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),
+         Respuesta_Abierta = removePunctuation(Respuesta_Abierta),
+         Respuesta_Abierta = removeNumbers(Respuesta_Abierta),
+         Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>%
+  unnest_tokens(bigrama, Respuesta_Abierta, token = "ngrams", n = 2) %>%
+  separate(bigrama, into = c("palabra1", "palabra2"), sep = " ") %>%
+  filter(!is.na(palabra1), !is.na(palabra2)) %>%
+  filter(!palabra1 %in% stopwords("es"),
+         !palabra2 %in% stopwords("es")) %>%
+  filter(!palabra1 %in% palabras_genericas,
+         !palabra2 %in% palabras_genericas) %>%
+  count(palabra1, palabra2, sort = TRUE) %>%
+  filter(n > 5)  # Ajusta este umbral según convenga
+
+# Crear y visualizar la red de bigramas informativos
+bigram_graph <- graph_from_data_frame(bigram_separados)
+
+ggraph(bigram_graph, layout = "fr") +
+  geom_edge_link(aes(edge_alpha = n), show.legend = FALSE,
+                 arrow = arrow(type = "closed", length = unit(3, "mm"))) +
+  geom_node_point(color = "darkblue", size = 4) +
+  geom_node_text(aes(label = name), vjust = 1.5, size = 4) +
   theme_minimal() +
-  theme(plot.title = element_text(face = "bold", size = 16),
-        axis.text = element_text(size = 12),
-        axis.title = element_text(size = 14))
+  labs(title = "Red de Bigramas Informativos",
+       subtitle = "Conexiones entre palabras significativas")
 
 # 5. Análisis de sentimientos
 sentimientos <- get_nrc_sentiment(df$Respuesta_Abierta, language = "spanish")
@@ -156,17 +171,19 @@ tibble(sentimiento = names(summary_sentimientos), total = summary_sentimientos) 
         axis.title = element_text(size = 14),
         legend.position = "none")
 
-# Adicional: Zoom en sentimientos negativos
-# Se extraen aquellos sentimientos que indican aspectos negativos
+# Zoom en sentimientos negativos: filtrar respuestas con emociones negativas
 negativos <- c("anger", "disgust", "fear", "sadness", "negative")
-neg_summary <- tibble(sentimiento = negativos, total = summary_sentimientos[negativos])
+df_sentimientos <- cbind(df, sentimientos)
+df_negativos <- df_sentimientos %>%
+  filter(anger > 0 | disgust > 0 | fear > 0 | sadness > 0 | negative > 0)
 
-neg_summary %>%
+# Visualización de los sentimientos negativos en general (opcional)
+tibble(sentimiento = negativos, total = summary_sentimientos[negativos]) %>%
   ggplot(aes(x = reorder(sentimiento, total), y = total, fill = sentimiento)) +
   geom_bar(stat = "identity") +
   coord_flip() +
   labs(title = "Zoom en Sentimientos Negativos",
-       subtitle = "Enojo, disgusto, miedo, tristeza y sentimiento negativo general",
+       subtitle = "Enojo, disgusto, miedo, tristeza y negativo global",
        x = "Sentimiento negativo", y = "Total") +
   theme_minimal() +
   theme(plot.title = element_text(face = "bold", size = 16),
@@ -174,13 +191,17 @@ neg_summary %>%
         axis.title = element_text(size = 14),
         legend.position = "none")
 
+# Guardar respuestas con percepciones negativas para revisión manual
+ruta_export <- file.path(dirname(ruta_archivo), "Revisión Manual Sentimientos Negativos.xlsx")
+write_xlsx(df_negativos, path = ruta_export)
+
 # 6. Modelado de tópicos (LDA)
 # Crear la matriz documento-término (DTM) usando el identificador 'doc_id'
 dtm <- df_limpio %>%
   count(doc_id, word, sort = TRUE) %>%
   cast_dtm(document = doc_id, term = word, value = n)
 
-# Ajustar un modelo LDA con 5 tópicos (puedes ajustar este número según sea necesario)
+# Ajustar un modelo LDA con 5 tópicos (ajustable según necesidad)
 lda_model <- LDA(dtm, k = 5, control = list(seed = 1234))
 
 # Extraer los tópicos y las palabras clave
