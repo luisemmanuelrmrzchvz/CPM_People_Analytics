@@ -165,7 +165,8 @@ print(top_terms)
 ####################################################################################
 
 
-> library(readxl)       # Para leer archivos Excel
+> # Cargar las librerías necesarias
+  > library(readxl)       # Para leer archivos Excel
 > library(tidyverse)    # Para manipulación de datos
 > library(tm)           # Para procesamiento de texto
 > library(tidytext)     # Para tokenización y análisis de texto
@@ -214,30 +215,49 @@ word            n
 9 comentarios   103
 10 ninguno       103
 > 
-  > # Visualización de palabras más comunes
+  > # Visualización de palabras más comunes (gráfico mejorado)
   > word_counts %>%
   +   filter(n > 50) %>%
   +   ggplot(aes(x = reorder(word, n), y = n)) +
   +   geom_bar(stat = "identity", fill = "steelblue") +
   +   coord_flip() +
-  +   labs(title = "Palabras más comunes en respuestas abiertas", x = "Palabra", y = "Frecuencia")
+  +   labs(title = "Palabras más comunes en respuestas abiertas",
+           +        subtitle = "Frecuencia de palabras",
+           +        x = "Palabra", y = "Frecuencia") +
+  +   theme_minimal() +
+  +   theme(plot.title = element_text(face = "bold", size = 16),
+            +         axis.text = element_text(size = 12),
+            +         axis.title = element_text(size = 14))
 > 
   > # 4. Bigramas (frases de 2 palabras)
   > bigramas <- df %>%
+  +   # Se aplica una limpieza previa para formar correctamente los n-gramas
+  +   mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),
+             +          Respuesta_Abierta = removePunctuation(Respuesta_Abierta),
+             +          Respuesta_Abierta = removeNumbers(Respuesta_Abierta),
+             +          Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>%
   +   unnest_tokens(bigrama, Respuesta_Abierta, token = "ngrams", n = 2) %>%
   +   separate(bigrama, into = c("palabra1", "palabra2"), sep = " ") %>%
+  +   # Eliminar casos donde una de las dos palabras sea NA
+  +   filter(!is.na(palabra1), !is.na(palabra2)) %>%
   +   filter(!palabra1 %in% stopwords("es"),
              +          !palabra2 %in% stopwords("es")) %>%
   +   unite(bigrama, palabra1, palabra2, sep = " ") %>%
   +   count(bigrama, sort = TRUE)
 > 
-  > # Visualización de bigramas
+  > # Visualización de bigramas (gráfico mejorado)
   > bigramas %>%
   +   filter(n > 20) %>%
   +   ggplot(aes(x = reorder(bigrama, n), y = n)) +
   +   geom_bar(stat = "identity", fill = "tomato") +
   +   coord_flip() +
-  +   labs(title = "Bigramas más comunes en respuestas abiertas", x = "Bigrama", y = "Frecuencia")
+  +   labs(title = "Bigramas más comunes en respuestas abiertas",
+           +        subtitle = "Frecuencia de combinaciones de dos palabras",
+           +        x = "Bigrama", y = "Frecuencia") +
+  +   theme_minimal() +
+  +   theme(plot.title = element_text(face = "bold", size = 16),
+            +         axis.text = element_text(size = 12),
+            +         axis.title = element_text(size = 14))
 > 
   > # 5. Análisis de sentimientos
   > sentimientos <- get_nrc_sentiment(df$Respuesta_Abierta, language = "spanish")
@@ -246,12 +266,19 @@ word            n
 anger anticipation      disgust         fear          joy      sadness     surprise        trust     negative     positive 
 40          246           29          108          313          361           80          593          450         1243 
 > 
-  > # Visualización de sentimientos
+  > # Visualización de sentimientos (gráfico mejorado)
   > tibble(sentimiento = names(summary_sentimientos), total = summary_sentimientos) %>%
   +   ggplot(aes(x = reorder(sentimiento, total), y = total, fill = sentimiento)) +
   +   geom_bar(stat = "identity") +
   +   coord_flip() +
-  +   labs(title = "Análisis de sentimientos", x = "Sentimiento", y = "Total")
+  +   labs(title = "Análisis de Sentimientos",
+           +        subtitle = "Distribución de emociones en las respuestas",
+           +        x = "Sentimiento", y = "Total") +
+  +   theme_minimal() +
+  +   theme(plot.title = element_text(face = "bold", size = 16),
+            +         axis.text = element_text(size = 12),
+            +         axis.title = element_text(size = 14),
+            +         legend.position = "none")
 > 
   > # 6. Modelado de tópicos (LDA)
   > # Crear la matriz documento-término (DTM) usando el identificador 'doc_id'
@@ -259,7 +286,7 @@ anger anticipation      disgust         fear          joy      sadness     surpr
   +   count(doc_id, word, sort = TRUE) %>%
   +   cast_dtm(document = doc_id, term = word, value = n)
 > 
-  > # Ajustar un modelo LDA con 5 tópicos (ajustable según necesidad)
+  > # Ajustar un modelo LDA con 5 tópicos (puedes ajustar este número según sea necesario)
   > lda_model <- LDA(dtm, k = 5, control = list(seed = 1234))
 > 
   > # Extraer los tópicos y las palabras clave
