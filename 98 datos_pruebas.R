@@ -38,54 +38,93 @@ print("Datos insertados en la base de datos correctamente.")
 ####################################################################################
 ####################################################################################
 
-library(tidyverse)
-library(tidytext)
-library(topicmodels)
-library(tm)
-library(textclean)
-library(textstem)
+library(readxl)       # Para leer archivos Excel
+library(tidyverse)    # Para manipulación de datos
+library(tm)           # Para procesamiento de texto
+library(tidytext)     # Para tokenización y análisis de texto
+library(syuzhet)      # Para análisis de sentimientos
+library(topicmodels)  # Para modelado de tópicos
+library(ggplot2)      # Para visualización
+library(textstem)     # Para lematización
+library(widyr)        # Para n-gramas
 
-# Cargar datos
-df <- read.csv("Encuesta.csv", stringsAsFactors = FALSE)
+# 1. Cargar el archivo Excel y renombrar la columna
+ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas_abiertas.xlsx"
+df <- read_excel(ruta_archivo, col_names = FALSE)  # Leer sin nombres de columna
+colnames(df) <- c("Respuesta_Abierta")  # Asignar el nombre "Respuesta_Abierta"
 
-# Verificar nombres de las columnas
-print(names(df))
+# Eliminar filas vacías
+df <- df %>% filter(!is.na(Respuesta_Abierta) & Respuesta_Abierta != "")
 
-# Convertir texto a minúsculas y eliminar caracteres especiales
+# 2. Limpieza de datos
 df_limpio <- df %>%
-  mutate(Respuesta_Abierta = tolower(Respuesta_Abierta)) %>%
-  mutate(Respuesta_Abierta = replace_non_ascii(Respuesta_Abierta)) %>%
-  mutate(Respuesta_Abierta = gsub("[^a-z ]", "", Respuesta_Abierta))
+  mutate(Respuesta_Abierta = tolower(Respuesta_Abierta), # Convertir a minúsculas
+         Respuesta_Abierta = removePunctuation(Respuesta_Abierta), # Eliminar puntuación
+         Respuesta_Abierta = removeNumbers(Respuesta_Abierta), # Eliminar números
+         Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>% # Eliminar espacios extra
+  unnest_tokens(word, Respuesta_Abierta) %>%
+  filter(!word %in% stopwords("es")) # Eliminar stopwords en español
 
-# Eliminar filas con respuestas vacías
-df_limpio <- df_limpio %>% filter(!is.na(Respuesta_Abierta) & Respuesta_Abierta != "")
+# 3. Lematización
+df_limpio <- df_limpio %>%
+  mutate(word = lemmatize_strings(word, language = "es"))
 
-# Tokenización
-df_tokens <- df_limpio %>%
-  unnest_tokens(word, Respuesta_Abierta)
-
-# Eliminar stopwords
-data("stop_words")
-df_tokens <- df_tokens %>% anti_join(stop_words, by = "word")
-
-# Aplicar lematización
-df_tokens <- df_tokens %>% mutate(word = lemmatize_words(word))
-
-# Contar palabras más comunes
-top_words <- df_tokens %>%
+# 4. Análisis exploratorio: Palabras más comunes
+word_counts <- df_limpio %>%
   count(word, sort = TRUE)
-print(head(top_words, 20))
 
-# Crear Document-Term Matrix (DTM)
-dtm <- df_tokens %>%
-  count(Respuesta_Abierta, word) %>%
-  cast_dtm(document = Respuesta_Abierta, term = word, value = n)
+# Ver las 10 palabras más comunes
+print(head(word_counts, 10))
 
-# Ajustar modelo LDA con 3 tópicos (ajustable según necesidad)
-k <- 3
-lda_model <- LDA(dtm, k = k, control = list(seed = 1234))
+# Visualización de palabras más comunes
+word_counts %>%
+  filter(n > 50) %>%
+  ggplot(aes(x = reorder(word, n), y = n)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Palabras más comunes en respuestas abiertas", x = "Palabra", y = "Frecuencia")
 
-# Extraer términos por tópico
+# 5. Bigramas
+bigramas <- df %>%
+  unnest_tokens(bigrama, Respuesta_Abierta, token = "ngrams", n = 2) %>%
+  separate(bigrama, into = c("palabra1", "palabra2"), sep = " ") %>%
+  filter(!palabra1 %in% stopwords("es"),
+         !palabra2 %in% stopwords("es")) %>%
+  unite(bigrama, palabra1, palabra2, sep = " ") %>%
+  count(bigrama, sort = TRUE)
+
+# Visualización de bigramas
+bigramas %>%
+  filter(n > 20) %>%
+  ggplot(aes(x = reorder(bigrama, n), y = n)) +
+  geom_bar(stat = "identity", fill = "tomato") +
+  coord_flip() +
+  labs(title = "Bigramas más comunes en respuestas abiertas", x = "Bigrama", y = "Frecuencia")
+
+# 6. Análisis de sentimientos
+sentimientos <- get_nrc_sentiment(df$Respuesta_Abierta, language = "spanish")
+
+# Resumir sentimientos
+summary_sentimientos <- colSums(sentimientos)
+print(summary_sentimientos)
+
+# Visualización de sentimientos
+tibble(sentimiento = names(summary_sentimientos), total = summary_sentimientos) %>%
+  ggplot(aes(x = reorder(sentimiento, total), y = total, fill = sentimiento)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Análisis de sentimientos", x = "Sentimiento", y = "Total")
+
+# 7. Modelado de tópicos (LDA)
+# Crear matriz de términos-documento (DTM)
+dtm <- df_limpio %>%
+  count(word, name = "freq") %>%
+  cast_dtm(document = 1, term = word, value = freq)
+
+# Ajustar modelo LDA con 5 tópicos
+lda_model <- LDA(dtm, k = 5, control = list(seed = 1234))
+
+# Ver los tópicos y palabras clave
 topics <- tidy(lda_model, matrix = "beta")
 top_terms <- topics %>%
   group_by(topic) %>%
@@ -94,7 +133,6 @@ top_terms <- topics %>%
   arrange(topic, -beta)
 
 print(top_terms)
-
 
 
 ####################################################################################
