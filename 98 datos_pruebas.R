@@ -140,3 +140,82 @@ print(top_terms)
 ####################################################################################
 ####################################################################################
 
+> library(readxl)       # Para leer archivos Excel
+Aviso:
+  package ‘readxl’ was built under R version 4.4.2 
+> library(tidyverse)    # Para manipulación de datos
+── Attaching core tidyverse packages ──────────────────────────────────────────────────────────────────────────────────────────────────────── tidyverse 2.0.0 ──
+✔ dplyr     1.1.4     ✔ readr     2.1.5
+✔ forcats   1.0.0     ✔ stringr   1.5.1
+✔ ggplot2   3.5.1     ✔ tibble    3.2.1
+✔ lubridate 1.9.4     ✔ tidyr     1.3.1
+✔ purrr     1.0.2     
+── Conflicts ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── tidyverse_conflicts() ──
+✖ dplyr::filter() masks stats::filter()
+✖ dplyr::lag()    masks stats::lag()
+ℹ Use the conflicted package to force all conflicts to become errors
+Avisos:
+  1: package ‘tidyverse’ was built under R version 4.4.2 
+2: package ‘ggplot2’ was built under R version 4.4.2 
+3: package ‘tidyr’ was built under R version 4.4.2 
+4: package ‘readr’ was built under R version 4.4.2 
+5: package ‘purrr’ was built under R version 4.4.2 
+6: package ‘dplyr’ was built under R version 4.4.2 
+7: package ‘forcats’ was built under R version 4.4.2 
+8: package ‘lubridate’ was built under R version 4.4.2 
+> library(tm)           # Para procesamiento de texto
+Cargando paquete requerido: NLP
+
+Adjuntando el paquete: ‘NLP’
+
+The following object is masked from ‘package:ggplot2’:
+  
+  annotate
+
+Avisos:
+  1: package ‘tm’ was built under R version 4.4.2 
+2: package ‘NLP’ was built under R version 4.4.2 
+> library(tidytext)     # Para tokenización y análisis de texto
+Aviso:
+  package ‘tidytext’ was built under R version 4.4.2 
+> library(syuzhet)      # Para análisis de sentimientos
+Aviso:
+  package ‘syuzhet’ was built under R version 4.4.2 
+> library(topicmodels)  # Para modelado de tópicos
+Aviso:
+  package ‘topicmodels’ was built under R version 4.4.2 
+> library(ggplot2)      # Para visualización
+> library(textstem)     # Para lematización
+Cargando paquete requerido: koRpus.lang.en
+Cargando paquete requerido: koRpus
+Cargando paquete requerido: sylly
+For information on available language packages for 'koRpus', run
+
+available.koRpus.lang()
+
+and see ?install.koRpus.lang()
+
+
+Adjuntando el paquete: ‘koRpus’
+
+The following object is masked from ‘package:tm’:
+  
+  readTagged
+
+The following object is masked from ‘package:readr’:
+  
+  tokenize
+
+Avisos:
+  1: package ‘textstem’ was built under R version 4.4.2 
+2: package ‘koRpus.lang.en’ was built under R version 4.4.2 
+3: package ‘koRpus’ was built under R version 4.4.2 
+4: package ‘sylly’ was built under R version 4.4.2 
+> library(widyr)        # Para n-gramas
+Aviso:
+  package ‘widyr’ was built under R version 4.4.2 
+> 
+  > # 1. Cargar el archivo Excel y renombrar la columna
+  > ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas_abiertas.xlsx"
+> df <- read_excel(ruta_archivo, col_names = FALSE)  # Leer sin nombres de columna
+Error: `path` does not exist: ‘C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas_abiertas.xlsx’
