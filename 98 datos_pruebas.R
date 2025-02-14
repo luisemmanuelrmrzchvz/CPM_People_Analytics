@@ -66,19 +66,19 @@ df <- df %>%
 
 # 2. Limpieza de datos y tokenización
 df_limpio <- df %>%
-  mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),                  # Convertir a minúsculas
-         Respuesta_Abierta = removePunctuation(Respuesta_Abierta),          # Eliminar puntuación
-         Respuesta_Abierta = removeNumbers(Respuesta_Abierta),              # Eliminar números
-         Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>%        # Eliminar espacios extra
-  unnest_tokens(word, Respuesta_Abierta) %>%                                # Tokenizar
-  filter(!word %in% stopwords("es")) %>%                                    # Eliminar stopwords en español
-  mutate(word = lemmatize_strings(word, language = "es"))                   # Lematización
+  mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),
+         Respuesta_Abierta = removePunctuation(Respuesta_Abierta),
+         Respuesta_Abierta = removeNumbers(Respuesta_Abierta),
+         Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>%
+  unnest_tokens(word, Respuesta_Abierta) %>%
+  filter(!word %in% stopwords("es")) %>%
+  mutate(word = lemmatize_strings(word, language = "es"))
 
 # 3. Análisis exploratorio: Palabras más comunes
 word_counts <- df_limpio %>% count(word, sort = TRUE)
 print(head(word_counts, 10))
 
-# Visualización de palabras más comunes (gráfico mejorado)
+# Gráfico de palabras más comunes
 word_counts %>%
   filter(n > 50) %>%
   ggplot(aes(x = reorder(word, n), y = n)) +
@@ -92,8 +92,8 @@ word_counts %>%
         axis.text = element_text(size = 12),
         axis.title = element_text(size = 14))
 
-# 4. Bigramas (frases de 2 palabras)
-# Generamos bigramas a partir del df original aplicando una limpieza previa
+# 4. Bigramas: extracción y visualización
+# Generar bigramas (a partir del df original) aplicando limpieza previa
 bigramas <- df %>%
   mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),
          Respuesta_Abierta = removePunctuation(Respuesta_Abierta),
@@ -107,7 +107,7 @@ bigramas <- df %>%
   unite(bigrama, palabra1, palabra2, sep = " ") %>%
   count(bigrama, sort = TRUE)
 
-# Visualización de bigramas generales (gráfico mejorado)
+# Gráfico de barras de bigramas generales
 bigramas %>%
   filter(n > 20) %>%
   ggplot(aes(x = reorder(bigrama, n), y = n)) +
@@ -121,9 +121,10 @@ bigramas %>%
         axis.text = element_text(size = 12),
         axis.title = element_text(size = 14))
 
-# Bigramas informativos: red de bigramas
-# Separamos nuevamente los bigramas sin unir para crear la red
-palabras_genericas <- c("bien", "gracias", "informacion", "ninguna", "socio", "curso", "momento", "excelente", "comentarios", "ninguno")
+# Bigramas informativos: visualización en red
+# Lista de palabras genéricas a excluir (ajusta según tu contexto)
+palabras_genericas <- c("bien", "gracias", "informacion", "ninguna", 
+                        "socio", "curso", "momento", "excelente", "comentarios", "ninguno")
 
 bigram_separados <- df %>%
   mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),
@@ -138,7 +139,7 @@ bigram_separados <- df %>%
   filter(!palabra1 %in% palabras_genericas,
          !palabra2 %in% palabras_genericas) %>%
   count(palabra1, palabra2, sort = TRUE) %>%
-  filter(n > 5)  # Ajusta este umbral según convenga
+  filter(n > 5)  # Umbral ajustable
 
 # Crear y visualizar la red de bigramas informativos
 bigram_graph <- graph_from_data_frame(bigram_separados)
@@ -153,11 +154,12 @@ ggraph(bigram_graph, layout = "fr") +
        subtitle = "Conexiones entre palabras significativas")
 
 # 5. Análisis de sentimientos
+# NOTA: El método de lexicón (NRC) es útil para un primer acercamiento, pero tiene limitaciones al no captar todo el contexto.
 sentimientos <- get_nrc_sentiment(df$Respuesta_Abierta, language = "spanish")
 summary_sentimientos <- colSums(sentimientos)
 print(summary_sentimientos)
 
-# Visualización de sentimientos (gráfico mejorado)
+# Gráfico global de sentimientos
 tibble(sentimiento = names(summary_sentimientos), total = summary_sentimientos) %>%
   ggplot(aes(x = reorder(sentimiento, total), y = total, fill = sentimiento)) +
   geom_bar(stat = "identity") +
@@ -171,27 +173,16 @@ tibble(sentimiento = names(summary_sentimientos), total = summary_sentimientos) 
         axis.title = element_text(size = 14),
         legend.position = "none")
 
-# Zoom en sentimientos negativos: filtrar respuestas con emociones negativas
-negativos <- c("anger", "disgust", "fear", "sadness", "negative")
-df_sentimientos <- cbind(df, sentimientos)
+# Exportar respuestas con percepciones negativas para revisión manual
+# Se filtran solo respuestas con más de 50 caracteres (para evitar casos triviales como "nada" o "muy bien")
+# y que presenten al menos una señal de emociones negativas.
+df_sentimientos <- cbind(df, sentimientos) %>%
+  mutate(num_caracteres = nchar(Respuesta_Abierta))
+
 df_negativos <- df_sentimientos %>%
-  filter(anger > 0 | disgust > 0 | fear > 0 | sadness > 0 | negative > 0)
+  filter((anger > 0 | disgust > 0 | fear > 0 | sadness > 0 | negative > 0) & num_caracteres > 50)
 
-# Visualización de los sentimientos negativos en general (opcional)
-tibble(sentimiento = negativos, total = summary_sentimientos[negativos]) %>%
-  ggplot(aes(x = reorder(sentimiento, total), y = total, fill = sentimiento)) +
-  geom_bar(stat = "identity") +
-  coord_flip() +
-  labs(title = "Zoom en Sentimientos Negativos",
-       subtitle = "Enojo, disgusto, miedo, tristeza y negativo global",
-       x = "Sentimiento negativo", y = "Total") +
-  theme_minimal() +
-  theme(plot.title = element_text(face = "bold", size = 16),
-        axis.text = element_text(size = 12),
-        axis.title = element_text(size = 14),
-        legend.position = "none")
-
-# Guardar respuestas con percepciones negativas para revisión manual
+# Guardar el archivo en la misma carpeta del original
 ruta_export <- file.path(dirname(ruta_archivo), "Revisión Manual Sentimientos Negativos.xlsx")
 write_xlsx(df_negativos, path = ruta_export)
 
@@ -204,7 +195,7 @@ dtm <- df_limpio %>%
 # Ajustar un modelo LDA con 5 tópicos (ajustable según necesidad)
 lda_model <- LDA(dtm, k = 5, control = list(seed = 1234))
 
-# Extraer los tópicos y las palabras clave
+# Extraer tópicos y palabras clave
 topics <- tidy(lda_model, matrix = "beta")
 top_terms <- topics %>%
   group_by(topic) %>%
@@ -218,13 +209,10 @@ print(top_terms)
 
 
 
+
 ####################################################################################
 ####################################################################################
 ####################################################################################
 ####################################################################################
 
 
-Respuesta_Abierta	doc_id	anger	anticipation	disgust	fear	joy	sadness	surprise	trust	negative	positive
-la capacitación e información ha sido esencial y buena para mejorar el servicio, el tema toca temas importantes como " el socio como centro de nuestro servicio" para conocer la experiencia de servicio del socio y que esta mejore también se deberá cuidar la parte laboral o talento humano, mediante estos activos de capacitación manteniendo un personal informado, capacitado, con plantillas completas y sobre todo con satisfacción de pertenecer a CPM, es por ello que es importante el cliente interno o la fuerza laboral esperadando que se mantenga así este año mediante incrementos salariales competitivos al mercado y acordes las nuevas metas y NO con las diferencias de los últimos años entre personal de confianza y sindicalizados.	62	1	1	0	2	2	0	0	7	1	15
-Existe al día de hoy una gran área de oportunidad para validar los teléfonos en sucursal, por servicio y practicidad es necesario cuenten con un equipo móvil para validar los números de teléfono de los socios, incluso para apoyar a los socios con consultas sobre las apps. Me parece un acierto que se retome el tema del porque se cancelan las solicitudes, me parece también que es necesario se identifiquen puntualmente por plaza las principales incidencias que se dan en lo particular y poder trabajarlas. También necesario prepara al personal porque el servicio es bien importante, en este mundo de tecnologia el diferenciador será el trato con el socio.	2131	0	1	1	1	0	1	2	3	2	3	656
-VIVIMOS  EN UN MUNDO  DE PRISAS Y EL SOCIO  NO TIENE  EL TIEMPO  SUFICENTE  PARA DURAR EN ESPERA PORQUE  SUS COMPROMISIS  LABORALES , PROFESIONALES  NO SE  LO PERMITEN  Y CPM NO LES  ESTA HACIENDO  NINGUN FAVOR ENTIENDANLO BIEN, LA  BUROCRACIA EN TRAMITES , PROCESOS  REPETITIVOS  Y POCO PERSONAL  EN ATENCION NO ES  SUFICIENTE NESECITAMOS  MAS  ANALISTAS  DE  CREDITO ,DE QUE  SIRVE TENER MUCHO MERCADO Y  NO TENEMOS  EL PERSONAL SUFICENTE  PARA  REALIZARLO ,  Y OJO NO ES PRESIONANDO AL PERSONAL A  DAR MAS , ES  NADA  MAS  SER CONGRUENTES	1950	0	1	0	0	0	1	0	2	2	1	541
