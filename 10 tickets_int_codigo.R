@@ -35,12 +35,27 @@ datos <- datos %>%
 datos <- datos %>%
   mutate(id_catalog = gsub("[^0-9]", "", id_catalog))  # Eliminar todo excepto los números
 
-# Filtrar los registros donde id_catalog sea un INTEGER de 10 dígitos y comience con 1 o 2
+# Filtrar los registros donde id_catalog sea un INTEGER de 10 dígitos
 datos <- datos %>%
-  filter(grepl("^\\d{10}$", id_catalog) & grepl("^[12]", id_catalog))  # Ajustado para 10 dígitos y que comience con 1 o 2
+  filter(grepl("^\\d{10}$", id_catalog))  # Ajustado para 10 dígitos
 
 # Verificar los datos después del filtrado
 print("Datos después del filtrado:")
+print(head(datos))
+
+# Conectar a la base de datos SQLite
+db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
+conn <- dbConnect(SQLite(), db_path)
+
+# Consultar los id_catalog existentes en la tabla catalog_tickets
+id_catalog_validos <- dbGetQuery(conn, "SELECT id_catalog FROM catalog_tickets")$id_catalog
+
+# Filtrar los datos para mantener solo los registros cuyo id_catalog esté en catalog_tickets
+datos <- datos %>%
+  filter(id_catalog %in% id_catalog_validos)
+
+# Verificar los datos después del filtrado
+print("Datos después de validar con catalog_tickets:")
 print(head(datos))
 
 # Eliminar saltos de línea en todas las columnas
@@ -56,10 +71,6 @@ for (col in columnas_fecha) {
 # Verificar los datos después de convertir las fechas
 print("Datos después de convertir las fechas:")
 print(head(datos))
-
-# Conectar a la base de datos SQLite
-db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
-conn <- dbConnect(SQLite(), db_path)
 
 # Consultar los id_ticket existentes en la tabla codigo_tickets
 id_tickets_existentes <- dbGetQuery(conn, "SELECT id_ticket FROM codigo_tickets")$id_ticket
