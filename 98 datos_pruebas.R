@@ -104,7 +104,7 @@ bigramas <- df %>%
   unite(bigrama, palabra1, palabra2, sep = " ") %>%
   count(bigrama, sort = TRUE)
 
-# Visualización de bigramas (gráfico mejorado)
+# Visualización de todos los bigramas (gráfico mejorado)
 bigramas %>%
   filter(n > 20) %>%
   ggplot(aes(x = reorder(bigrama, n), y = n)) +
@@ -112,6 +112,25 @@ bigramas %>%
   coord_flip() +
   labs(title = "Bigramas más comunes en respuestas abiertas",
        subtitle = "Frecuencia de combinaciones de dos palabras",
+       x = "Bigrama", y = "Frecuencia") +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size = 16),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 14))
+
+# Adicional: Filtrar y visualizar bigramas potencialmente más informativos
+# Se excluyen combinaciones que contengan palabras muy genéricas
+palabras_genericas <- c("bien", "gracias", "informacion", "ninguna", "socio", "curso", "momento", "excelente", "comentarios", "ninguno")
+bigramas_filtrados <- bigramas %>%
+  filter(!str_detect(bigrama, paste(palabras_genericas, collapse = "|")))
+
+bigramas_filtrados %>%
+  filter(n > 10) %>%  # Puedes ajustar el umbral según convenga
+  ggplot(aes(x = reorder(bigrama, n), y = n)) +
+  geom_bar(stat = "identity", fill = "darkorange") +
+  coord_flip() +
+  labs(title = "Bigramas informativos en respuestas abiertas",
+       subtitle = "Frases compuestas que aportan mayor contexto",
        x = "Bigrama", y = "Frecuencia") +
   theme_minimal() +
   theme(plot.title = element_text(face = "bold", size = 16),
@@ -137,6 +156,24 @@ tibble(sentimiento = names(summary_sentimientos), total = summary_sentimientos) 
         axis.title = element_text(size = 14),
         legend.position = "none")
 
+# Adicional: Zoom en sentimientos negativos
+# Se extraen aquellos sentimientos que indican aspectos negativos
+negativos <- c("anger", "disgust", "fear", "sadness", "negative")
+neg_summary <- tibble(sentimiento = negativos, total = summary_sentimientos[negativos])
+
+neg_summary %>%
+  ggplot(aes(x = reorder(sentimiento, total), y = total, fill = sentimiento)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Zoom en Sentimientos Negativos",
+       subtitle = "Enojo, disgusto, miedo, tristeza y sentimiento negativo general",
+       x = "Sentimiento negativo", y = "Total") +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size = 16),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        legend.position = "none")
+
 # 6. Modelado de tópicos (LDA)
 # Crear la matriz documento-término (DTM) usando el identificador 'doc_id'
 dtm <- df_limpio %>%
@@ -155,6 +192,7 @@ top_terms <- topics %>%
   arrange(topic, -beta)
 
 print(top_terms)
+
 
 
 
