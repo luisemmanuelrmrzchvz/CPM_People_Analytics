@@ -239,4 +239,47 @@ write_xlsx(df_negativos, path = "C:/Users/racl26345/Documents/Tablas para Automa
 
 ############################################################
 
-
+> # Cargar las librerías necesarias
+  > library(readxl)
+> library(tidyverse)
+> library(tm)
+> library(tidytext)
+> library(syuzhet)
+> library(caret)
+> library(udpipe)
+> library(writexl)
+> 
+  > # 1. Cargar el archivo Excel y renombrar la columna
+  > ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas abiertas.xlsx"
+> df <- read_excel(ruta_archivo, col_names = FALSE)
+New names:
+  • `` -> `...1`
+> colnames(df) <- c("Respuesta_Abierta")
+> 
+  > df <- df %>% 
+  +   filter(!is.na(Respuesta_Abierta) & Respuesta_Abierta != "") %>% 
+  +   mutate(doc_id = row_number())
+> 
+  > # 2. Limpieza de datos y tokenización
+  > df_limpio <- df %>%
+  +   mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),
+             +          Respuesta_Abierta = removePunctuation(Respuesta_Abierta),
+             +          Respuesta_Abierta = removeNumbers(Respuesta_Abierta),
+             +          Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>%
+  +   unnest_tokens(word, Respuesta_Abierta) %>%
+  +   filter(!word %in% stopwords("es")) %>%
+  +   mutate(word = lemmatize_strings(word, language = "es"),
+             +          word = stem_strings(word, language = "es"))
+> 
+  > # 3. Verificar que las respuestas están correctas después de la limpieza
+  > head(df_limpio$Respuesta_Abierta)
+NULL
+Aviso:
+  Unknown or uninitialised column: `Respuesta_Abierta`. 
+> 
+  > # 4. Análisis de sentimientos utilizando `syuzhet` (diccionario NRC)
+  > sentimientos <- get_nrc_sentiment(df_limpio$Respuesta_Abierta)
+Error en get_nrc_sentiment(df_limpio$Respuesta_Abierta): 
+  Data must be a character vector.
+Además: Aviso:
+  Unknown or uninitialised column: `Respuesta_Abierta`. 
