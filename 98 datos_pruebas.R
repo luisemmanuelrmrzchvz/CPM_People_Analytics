@@ -146,6 +146,7 @@ library(tidytext)
 library(syuzhet)
 library(caret)
 library(udpipe)
+library(writexl)
 
 # 1. Cargar el archivo Excel y renombrar la columna
 ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas abiertas.xlsx"
@@ -167,17 +168,25 @@ df_limpio <- df %>%
   mutate(word = lemmatize_strings(word, language = "es"),
          word = stem_strings(word, language = "es"))
 
-# 3. Análisis de sentimientos utilizando `syuzhet` (diccionario NRC)
-sentimientos <- get_sentiment(df_limpio$Respuesta_Abierta, method = "nrc", language = "spanish")
+# 3. Verificar que las respuestas están correctas después de la limpieza
+head(df_limpio$Respuesta_Abierta)
 
-df$sentimiento <- sentimientos$sentiment
+# 4. Análisis de sentimientos utilizando `syuzhet` (diccionario NRC)
+sentimientos <- get_nrc_sentiment(df_limpio$Respuesta_Abierta)
 
-# 4. Clasificación de Sentimientos (Machine Learning) con `caret`
+# Verificamos si el análisis se generó correctamente
+if (ncol(sentimientos) > 0) {
+  df$sentimiento <- ifelse(sentimientos$negative > sentimientos$positive, "Negativo", "Positivo")
+} else {
+  warning("El análisis de sentimientos no produjo resultados válidos.")
+}
+
+# 5. Clasificación de Sentimientos (Machine Learning) con `caret`
 # Primero etiquetamos los sentimientos en positivo/negativo para el modelo
-df$sentimiento_categoria <- ifelse(df$sentimiento == "positive", "Positivo", 
-                                   ifelse(df$sentimiento == "negative", "Negativo", "Neutral"))
+df$sentimiento_categoria <- ifelse(df$sentimiento == "Positivo", "Positivo", 
+                                   ifelse(df$sentimiento == "Negativo", "Negativo", "Neutral"))
 
-# 5. Preprocesamiento para Machine Learning
+# 6. Preprocesamiento para Machine Learning
 # Convertimos las respuestas en un formato adecuado para ML
 df_ml <- df %>%
   mutate(Respuesta_Abierta = tolower(Respuesta_Abierta)) %>%
@@ -203,7 +212,7 @@ colnames(dtm_df) <- make.names(colnames(dtm_df))
 # Agregar la variable de etiqueta (sentimiento) al data.frame
 dtm_df$sentimiento_categoria <- df_ml$sentimiento_categoria
 
-# 6. Entrenamiento de modelo con `caret` (Random Forest)
+# 7. Entrenamiento de modelo con `caret` (Random Forest)
 set.seed(123)
 
 # Entrenar el modelo usando Random Forest
@@ -215,10 +224,10 @@ predicciones <- predict(modelo_rf, dtm_df)
 # Agregar predicciones al dataframe original
 df$sentimiento_predicho <- predicciones
 
-# 7. Ver los resultados
+# 8. Ver los resultados
 head(df)
 
-# Guardar las respuestas negativas en la nueva ubicación especificada
+# 9. Guardar las respuestas negativas en la nueva ubicación especificada
 df_negativos <- df %>%
   filter(sentimiento_predicho == "Negativo") %>%
   select(doc_id, Respuesta_Abierta, sentimiento_predicho)
@@ -226,85 +235,8 @@ df_negativos <- df %>%
 # Especificar la nueva ruta para guardar el archivo
 write_xlsx(df_negativos, path = "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas_Negativas_ML.xlsx")
 
+
+
 ############################################################
 
 
-
-> # Cargar las librerías necesarias
-  > library(readxl)
-> library(tidyverse)
-> library(tm)
-> library(tidytext)
-> library(syuzhet)
-> library(caret)
-Cargando paquete requerido: lattice
-
-Adjuntando el paquete: ‘caret’
-
-The following object is masked from ‘package:purrr’:
-  
-  lift
-
-Aviso:
-  package ‘caret’ was built under R version 4.4.2 
-> library(udpipe)
-> 
-  > # 1. Cargar el archivo Excel y renombrar la columna
-  > ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas abiertas.xlsx"
-> df <- read_excel(ruta_archivo, col_names = FALSE)
-New names:
-  • `` -> `...1`
-> colnames(df) <- c("Respuesta_Abierta")
-> 
-  > df <- df %>% 
-  +   filter(!is.na(Respuesta_Abierta) & Respuesta_Abierta != "") %>% 
-  +   mutate(doc_id = row_number())
-> 
-  > # 2. Limpieza de datos y tokenización
-  > df_limpio <- df %>%
-  +   mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),
-             +          Respuesta_Abierta = removePunctuation(Respuesta_Abierta),
-             +          Respuesta_Abierta = removeNumbers(Respuesta_Abierta),
-             +          Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>%
-  +   unnest_tokens(word, Respuesta_Abierta) %>%
-  +   filter(!word %in% stopwords("es")) %>%
-  +   mutate(word = lemmatize_strings(word, language = "es"),
-             +          word = stem_strings(word, language = "es"))
-> 
-  > # 3. Análisis de sentimientos utilizando `syuzhet` (diccionario NRC)
-  > sentimientos <- get_sentiment(df_limpio$Respuesta_Abierta, method = "nrc", language = "spanish")
-Aviso:
-  Unknown or uninitialised column: `Respuesta_Abierta`. 
-> 
-  > df$sentimiento <- sentimientos$sentiment
-> 
-  > # 4. Clasificación de Sentimientos (Machine Learning) con `caret`
-  > # Primero etiquetamos los sentimientos en positivo/negativo para el modelo
-  > df$sentimiento_categoria <- ifelse(df$sentimiento == "positive", "Positivo", 
-                                       +                                    ifelse(df$sentimiento == "negative", "Negativo", "Neutral"))
-Error in `$<-`:
-  ! Assigned data `ifelse(...)` must be compatible with existing data.
-✖ Existing data has 2564 rows.
-✖ Assigned data has 0 rows.
-ℹ Only vectors of size 1 are recycled.
-Caused by error in `vectbl_recycle_rhs_rows()`:
-  ! Can't recycle input of size 0 to size 2564.
-Run `rlang::last_trace()` to see where the error occurred.
-Aviso:
-Unknown or uninitialised column: `sentimiento`. 
-> rlang::last_trace()
-<error/tibble_error_assign_incompatible_size>
-Error in `$<-`:
-! Assigned data `ifelse(...)` must be compatible with existing data.
-✖ Existing data has 2564 rows.
-✖ Assigned data has 0 rows.
-ℹ Only vectors of size 1 are recycled.
-Caused by error in `vectbl_recycle_rhs_rows()`:
-! Can't recycle input of size 0 to size 2564.
----
-  Backtrace:
-  ▆
-1. ├─base::`$<-`(`*tmp*`, sentimiento_categoria, value = `<lgl>`)
-2. └─tibble:::`$<-.tbl_df`(`*tmp*`, sentimiento_categoria, value = `<lgl>`)
-3.   └─tibble:::tbl_subassign(...)
-4.     └─tibble:::vectbl_recycle_rhs_rows(value, fast_nrow(xo), i_arg = NULL, value_arg, call)
