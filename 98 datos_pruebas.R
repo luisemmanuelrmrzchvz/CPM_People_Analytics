@@ -175,88 +175,94 @@ df_limpio <- df_modelo %>%
          Respuesta_Abierta = removeNumbers(Respuesta_Abierta),
          Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>%
   unnest_tokens(word, Respuesta_Abierta) %>%
-  filter(!word %in% stopwords("es"))
+  filter(!word %in% stopwords("es")) %>%
+  mutate(word = lemmatize_strings(word, language = "es"),
+         word = stem_strings(word, language = "es"))
 
-# 5. Lematización utilizando udpipe
-# Cargar un modelo de UDPIPE en español
-ud_model <- udpipe_download_model(language = "spanish")
-ud_model <- udpipe_load_model(ud_model$file_model)
-
-# Realizar lematización usando el modelo de udpipe
-df_limpio_lemma <- df_limpio %>%
-  mutate(lemma = as.character(udpipe_annotate(ud_model, x = word)$lemma)) %>%
-  filter(!is.na(lemma))
-
-# 6. Agregar la columna original `Respuesta_Abierta` a `df_limpio` para análisis de sentimientos
-df_limpio_lemma <- df_limpio_lemma %>%
+# 5. Agregar la columna original `Respuesta_Abierta` a `df_limpio` para análisis de sentimientos
+df_limpio <- df_limpio %>%
   left_join(df %>% select(doc_id, Respuesta_Abierta), by = "doc_id")
 
-# 7. Análisis de sentimientos utilizando `syuzhet` (diccionario NRC) para las respuestas mayores a 3 palabras
-sentimientos <- get_nrc_sentiment(df_limpio_lemma$Respuesta_Abierta)
+# 6. Análisis de sentimientos utilizando `syuzhet` (diccionario NRC) para las respuestas mayores a 3 palabras
+sentimientos <- get_nrc_sentiment(df_limpio$Respuesta_Abierta)
 
-# 8. Clasificación de sentimientos (Positivo, Negativo, Neutro, con categorías más detalladas)
+# 7. Clasificación de sentimientos (Positivo, Negativo, Neutro, con categorías más detalladas)
 if (ncol(sentimientos) > 0) {
-  df_limpio_lemma$sentimiento_valor <- sentimientos$positive - sentimientos$negative  # Puntaje de sentimiento
+  df_limpio$sentimiento_valor <- sentimientos$positive - sentimientos$negative  # Puntaje de sentimiento
   
   # Ajustar las categorías de sentimiento según el puntaje
-  df_limpio_lemma$sentimiento <- case_when(
-    df_limpio_lemma$sentimiento_valor <= -2 ~ "Muy Negativo",
-    df_limpio_lemma$sentimiento_valor == -1 ~ "Negativo",
-    df_limpio_lemma$sentimiento_valor == 0 ~ "Neutro",
-    df_limpio_lemma$sentimiento_valor == 1 ~ "Positivo",
-    df_limpio_lemma$sentimiento_valor >= 2 ~ "Muy Positivo",
+  df_limpio$sentimiento <- case_when(
+    df_limpio$sentimiento_valor <= -2 ~ "Muy Negativo",
+    df_limpio$sentimiento_valor == -1 ~ "Negativo",
+    df_limpio$sentimiento_valor == 0 ~ "Neutro",
+    df_limpio$sentimiento_valor == 1 ~ "Positivo",
+    df_limpio$sentimiento_valor >= 2 ~ "Muy Positivo",
     TRUE ~ "Neutro"
   )
 } else {
   warning("El análisis de sentimientos no produjo resultados válidos.")
 }
 
-# 9. Filtrar respuestas "Neutro_Directo" y respuestas que entran al modelo
+# 8. Filtrar respuestas "Neutro_Directo" y respuestas que entran al modelo
 df_neutro_directo <- df %>% filter(sentimiento == "Neutro_Directo")
 df_entrar_modelo <- df %>% filter(sentimiento != "Neutro_Directo")
 
-# 10. Calcular la proporción y volumen de "Neutro_Directo" vs "Entran a Modelo"
+# 9. Calcular la proporción y volumen de "Neutro_Directo" vs "Entran a Modelo"
 proporcion <- df %>%
-  mutate(categoria = if_else(sentimiento == "Neutro_Directo", "Neutro_Directo", "Entran a Modelo")) %>%
-  group_by(categoria) %>%
-  summarise(Conteo = n()) %>%
-  mutate(Porcentaje = Conteo / sum(Conteo) * 100)
+  summarise(Neutro_Directo = sum(sentimiento == "Neutro_Directo"),
+            Entran_a_Modelo = sum(sentimiento != "Neutro_Directo")) %>%
+  mutate(Total = Neutro_Directo + Entran_a_Modelo,
+         Porcentaje_Neutro_Directo = Neutro_Directo / Total * 100,
+         Porcentaje_Entran_a_Modelo = Entran_a_Modelo / Total * 100)
 
-# Ver el resultado de la proporción
 print(proporcion)
 
-# Gráfico de la proporción "Neutro_Directo" vs "Entran a Modelo"
-ggplot(proporcion, aes(x = categoria, y = Porcentaje, fill = categoria)) +
-  geom_bar(stat = "identity") +
-  labs(title = "Proporción de Neutro_Directo vs Entran a Modelo", x = "Categoría", y = "Porcentaje") +
-  scale_fill_manual(values = c("Neutro_Directo" = "lightblue", "Entran a Modelo" = "lightgreen")) +
-  theme_minimal()
+# 10. Frecuencias de palabras para respuestas "Neutro_Directo"
+# Top 15 palabras más comunes
+top_palabras <- df_limpio %>%
+  count(word, sort = TRUE) %>%
+  top_n(15)
 
-# 11. Análisis de bigramas y trigramas (para obtener las relaciones entre palabras)
-# Extraemos los bigramas y trigramas para observar las relaciones
-df_bigrams <- df_limpio_lemma %>%
-  unnest_tokens(bigram, Respuesta_Abierta, token = "ngrams", n = 2)
-
-# Filtramos los bigramas más frecuentes
-bigrams_freq <- df_bigrams %>% 
-  count(bigram, sort = TRUE) %>% 
-  filter(n > 1)
-
-# Graficar bigramas más frecuentes
-ggplot(bigrams_freq, aes(x = reorder(bigram, n), y = n, fill = bigram)) +
-  geom_bar(stat = "identity") +
+# Gráfico de frecuencias de palabras (Top 15 más frecuentes)
+ggplot(top_palabras, aes(x = reorder(word, n), y = n)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
   coord_flip() +
-  labs(title = "Frecuencia de Bigramas", x = "Bigramas", y = "Frecuencia") +
+  labs(title = "Frecuencia de Palabras (Top 15)") +
   theme_minimal()
 
-# 12. Ajuste del archivo de Excel: obtener clasificación promedio por cada registro
-df_promedio <- df_limpio_lemma %>%
-  group_by(doc_id) %>%
-  summarise(sentimiento_promedio = mean(sentimiento_valor, na.rm = TRUE)) %>%
-  left_join(df %>% select(doc_id, Respuesta_Abierta), by = "doc_id")
+# 11. Análisis de Bigramas
+# Análisis de bigramas, evitando el valor "N/A"
+bigrama <- df_limpio %>%
+  unnest_tokens(bigram, word, token = "ngrams", n = 2) %>%
+  count(bigram, sort = TRUE)
 
-# Guardar el archivo con la clasificación promedio de cada registro
-write_xlsx(df_promedio, "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas_Clasificadas.xlsx")
+# Filtrar bigramas vacíos
+bigrama <- bigrama %>%
+  filter(n > 0)
+
+if (nrow(bigrama) > 0) {
+  ggplot(bigrama, aes(x = reorder(bigram, n), y = n)) +
+    geom_bar(stat = "identity", fill = "lightgreen") +
+    coord_flip() +
+    labs(title = "Frecuencia de Bigramas") +
+    theme_minimal()
+} else {
+  print("No se encontraron bigramas válidos.")
+}
+
+# 12. Gráfico de distribución de sentimientos (Negativo, Neutro, Positivo, Muy Positivo, Muy Negativo)
+ggplot(df_limpio, aes(x = sentimiento, fill = sentimiento)) +
+  geom_bar() +
+  scale_fill_manual(values = c("Muy Positivo" = "blue", 
+                               "Positivo" = "green", 
+                               "Neutro" = "grey", 
+                               "Negativo" = "red", 
+                               "Muy Negativo" = "darkred")) +
+  labs(title = "Distribución de Sentimientos") +
+  theme_minimal()
+
+# 13. Guardar los resultados en un archivo Excel
+write_xlsx(df_limpio, "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Resultados_Clasificacion_Sentimientos.xlsx")
 
 
 
