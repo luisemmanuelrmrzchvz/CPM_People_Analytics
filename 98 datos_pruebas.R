@@ -210,199 +210,49 @@ df_entrar_modelo <- df %>% filter(sentimiento != "Neutro_Directo")
 
 # 9. Calcular la proporción y volumen de "Neutro_Directo" vs "Entran a Modelo"
 proporcion <- df %>%
-  summarise(Neutro_Directo = sum(sentimiento == "Neutro_Directo"),
-            Entran_a_Modelo = sum(sentimiento != "Neutro_Directo")) %>%
-  mutate(Total = Neutro_Directo + Entran_a_Modelo,
-         Porcentaje_Neutro_Directo = Neutro_Directo / Total * 100,
-         Porcentaje_Entran_a_Modelo = Entran_a_Modelo / Total * 100)
+  mutate(categoria = if_else(sentimiento == "Neutro_Directo", "Neutro_Directo", "Entran a Modelo")) %>%
+  group_by(categoria) %>%
+  summarise(Conteo = n()) %>%
+  mutate(Porcentaje = Conteo / sum(Conteo) * 100)
 
+# Ver el resultado de la proporción
 print(proporcion)
 
 # Gráfico de la proporción "Neutro_Directo" vs "Entran a Modelo"
-ggplot(proporcion, aes(x = c("Neutro_Directo", "Entran a Modelo"), 
-                      y = c(Porcentaje_Neutro_Directo, Porcentaje_Entran_a_Modelo), fill = c("Neutro_Directo", "Entran a Modelo"))) +
+ggplot(proporcion, aes(x = categoria, y = Porcentaje, fill = categoria)) +
   geom_bar(stat = "identity") +
   labs(title = "Proporción de Neutro_Directo vs Entran a Modelo", x = "Categoría", y = "Porcentaje") +
   scale_fill_manual(values = c("Neutro_Directo" = "lightblue", "Entran a Modelo" = "lightgreen")) +
   theme_minimal()
 
-# 10. Análisis de Bigramas
-# Análisis de bigramas, evitando el valor "N/A"
-bigrama <- df_limpio %>%
-  unnest_tokens(bigram, word, token = "ngrams", n = 2) %>%
-  count(bigram, sort = TRUE)
+# 10. Análisis de bigramas y trigramas (para obtener las relaciones entre palabras)
+# Extraemos los bigramas y trigramas para observar las relaciones
+df_bigrams <- df_limpio %>%
+  unnest_tokens(bigram, Respuesta_Abierta, token = "ngrams", n = 2)
 
-# Filtrar bigramas vacíos
-bigrama <- bigrama %>%
-  filter(n > 0)
+# Filtramos los bigramas más frecuentes
+bigrams_freq <- df_bigrams %>%
+  count(bigram, sort = TRUE) %>%
+  filter(n > 1)
 
-# Verificar el motivo de bigramas N/A (probablemente causado por ausencia de tokenización válida)
-if (nrow(bigrama) > 0) {
-  ggplot(bigrama, aes(x = reorder(bigram, n), y = n)) +
-    geom_bar(stat = "identity", fill = "lightgreen") +
-    coord_flip() +
-    labs(title = "Frecuencia de Bigramas") +
-    theme_minimal()
-} else {
-  print("No se encontraron bigramas válidos. Revisar el proceso de tokenización o los datos.")
-}
-
-# 11. Gráfico de distribución de sentimientos (Negativo, Neutro, Positivo, Muy Positivo, Muy Negativo)
-ggplot(df_limpio, aes(x = factor(sentimiento, levels = c("Muy Negativo", "Negativo", "Neutro", "Positivo", "Muy Positivo")), fill = sentimiento)) +
-  geom_bar() +
-  scale_fill_manual(values = c("Muy Negativo" = "darkred", 
-                               "Negativo" = "red", 
-                               "Neutro" = "grey", 
-                               "Positivo" = "green", 
-                               "Muy Positivo" = "blue")) +
-  labs(title = "Distribución de Sentimientos") +
+# Graficar bigramas más frecuentes
+ggplot(bigrams_freq, aes(x = reorder(bigram, n), y = n, fill = bigram)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Frecuencia de Bigramas", x = "Bigramas", y = "Frecuencia") +
   theme_minimal()
 
-# 12. Guardar los resultados en un archivo Excel con clasificación promedio por registro
-# Crear una tabla de resumen por registro con el promedio de clasificación de sentimiento
-df_resumen <- df_limpio %>%
+# 11. Ajuste del archivo de Excel: obtener clasificación promedio por cada registro
+df_promedio <- df_limpio %>%
   group_by(doc_id) %>%
-  summarise(Sentimiento_Promedio = mean(sentimiento_valor, na.rm = TRUE),
-            Sentimiento_Clasificado = case_when(
-              Sentimiento_Promedio <= -2 ~ "Muy Negativo",
-              Sentimiento_Promedio == -1 ~ "Negativo",
-              Sentimiento_Promedio == 0 ~ "Neutro",
-              Sentimiento_Promedio == 1 ~ "Positivo",
-              Sentimiento_Promedio >= 2 ~ "Muy Positivo",
-              TRUE ~ "Neutro"
-            ))
+  summarise(sentimiento_promedio = mean(sentimiento_valor, na.rm = TRUE)) %>%
+  left_join(df %>% select(doc_id, Respuesta_Abierta), by = "doc_id")
 
-write_xlsx(df_resumen, "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Resultados_Clasificacion_Sentimientos_Promedio.xlsx")
-
-
+# Guardar el archivo con la clasificación promedio de cada registro
+write_xlsx(df_promedio, "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas_Clasificadas.xlsx")
 
 
 
 
 ############################################################
 
-> # Cargar las librerías necesarias
-  > library(readxl)
-> library(tidyverse)
-> library(tm)
-> library(tidytext)
-> library(syuzhet)
-> library(caret)
-> library(udpipe)
-> library(writexl)
-> library(ggplot2)
-> 
-  > # 1. Cargar el archivo Excel, omitiendo la primera fila (título) y solo considerando los registros (no la pregunta)
-  > ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas abiertas.xlsx"
-> df <- read_excel(ruta_archivo, col_names = FALSE)
-New names:
-  • `` -> `...1`
-> 
-  > # Filtrar la primera fila que es la pregunta
-  > df <- df[-1, ]
-> colnames(df) <- c("Respuesta_Abierta")
-> 
-  > # 2. Filtrar respuestas con menos de 4 palabras y categorizar como "Neutro_Directo"
-  > df <- df %>%
-  +   filter(!is.na(Respuesta_Abierta) & Respuesta_Abierta != "") %>%
-  +   mutate(doc_id = row_number(),
-             +          num_palabras = str_count(Respuesta_Abierta, "\\w+"),
-             +          sentimiento = if_else(num_palabras < 4, "Neutro_Directo", NA_character_))
-> 
-  > # 3. Filtrar solo las respuestas con más de 3 palabras (para análisis de sentimientos)
-  > df_modelo <- df %>%
-  +   filter(num_palabras >= 4)
-> 
-  > # 4. Limpieza de datos y tokenización (solo para respuestas de más de 4 palabras)
-  > df_limpio <- df_modelo %>%
-  +   mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),
-             +          Respuesta_Abierta = removePunctuation(Respuesta_Abierta),
-             +          Respuesta_Abierta = removeNumbers(Respuesta_Abierta),
-             +          Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>%
-  +   unnest_tokens(word, Respuesta_Abierta) %>%
-  +   filter(!word %in% stopwords("es")) %>%
-  +   mutate(word = lemmatize_strings(word, language = "es"),
-             +          word = stem_strings(word, language = "es"))
-> 
-  > # 5. Agregar la columna original `Respuesta_Abierta` a `df_limpio` para análisis de sentimientos
-  > df_limpio <- df_limpio %>%
-  +   left_join(df %>% select(doc_id, Respuesta_Abierta), by = "doc_id")
-> 
-  > # 6. Análisis de sentimientos utilizando `syuzhet` (diccionario NRC) para las respuestas mayores a 3 palabras
-  > sentimientos <- get_nrc_sentiment(df_limpio$Respuesta_Abierta)
-> 
-  > # 7. Clasificación de sentimientos (Positivo, Negativo, Neutro, con categorías más detalladas)
-  > if (ncol(sentimientos) > 0) {
-    +   df_limpio$sentimiento_valor <- sentimientos$positive - sentimientos$negative  # Puntaje de sentimiento
-    +   
-      +   # Ajustar las categorías de sentimiento según el puntaje
-      +   df_limpio$sentimiento <- case_when(
-        +     df_limpio$sentimiento_valor <= -2 ~ "Muy Negativo",
-        +     df_limpio$sentimiento_valor == -1 ~ "Negativo",
-        +     df_limpio$sentimiento_valor == 0 ~ "Neutro",
-        +     df_limpio$sentimiento_valor == 1 ~ "Positivo",
-        +     df_limpio$sentimiento_valor >= 2 ~ "Muy Positivo",
-        +     TRUE ~ "Neutro"
-        +   )
-      + } else {
-        +   warning("El análisis de sentimientos no produjo resultados válidos.")
-        + }
-> 
-  > # 8. Filtrar respuestas "Neutro_Directo" y respuestas que entran al modelo
-  > df_neutro_directo <- df %>% filter(sentimiento == "Neutro_Directo")
-> df_entrar_modelo <- df %>% filter(sentimiento != "Neutro_Directo")
-> 
-  > # 9. Calcular la proporción y volumen de "Neutro_Directo" vs "Entran a Modelo"
-  > proporcion <- df %>%
-  +   summarise(Neutro_Directo = sum(sentimiento == "Neutro_Directo"),
-                +             Entran_a_Modelo = sum(sentimiento != "Neutro_Directo")) %>%
-  +   mutate(Total = Neutro_Directo + Entran_a_Modelo,
-             +          Porcentaje_Neutro_Directo = Neutro_Directo / Total * 100,
-             +          Porcentaje_Entran_a_Modelo = Entran_a_Modelo / Total * 100)
-> 
-  > print(proporcion)
-# A tibble: 1 × 5
-Neutro_Directo Entran_a_Modelo Total Porcentaje_Neutro_Directo Porcentaje_Entran_a_Modelo
-<int>           <int> <int>                     <dbl>                      <dbl>
-  1             NA              NA    NA                        NA                         NA
-> 
-  > # Gráfico de la proporción "Neutro_Directo" vs "Entran a Modelo"
-  > ggplot(proporcion, aes(x = c("Neutro_Directo", "Entran a Modelo"), 
-                           +                       y = c(Porcentaje_Neutro_Directo, Porcentaje_Entran_a_Modelo), fill = c("Neutro_Directo", "Entran a Modelo"))) +
-  +   geom_bar(stat = "identity") +
-  +   labs(title = "Proporción de Neutro_Directo vs Entran a Modelo", x = "Categoría", y = "Porcentaje") +
-  +   scale_fill_manual(values = c("Neutro_Directo" = "lightblue", "Entran a Modelo" = "lightgreen")) +
-  +   theme_minimal()
-Error in `geom_bar()`:
-  ! Problem while computing aesthetics.
-ℹ Error occurred in the 1st layer.
-Caused by error in `check_aesthetics()`:
-  ! Aesthetics must be either length 1 or the same as the data (1).
-✖ Fix the following mappings: `x`, `y`, and `fill`.
-Run `rlang::last_trace()` to see where the error occurred.
-> rlang::last_trace()
-<error/rlang_error>
-  Error in `geom_bar()`:
-  ! Problem while computing aesthetics.
-ℹ Error occurred in the 1st layer.
-Caused by error in `check_aesthetics()`:
-  ! Aesthetics must be either length 1 or the same as the data (1).
-✖ Fix the following mappings: `x`, `y`, and `fill`.
----
-  Backtrace:
-  ▆
-1. ├─base (local) `<fn>`(x)
-2. └─ggplot2:::print.ggplot(x)
-3.   ├─ggplot2::ggplot_build(x)
-4.   └─ggplot2:::ggplot_build.ggplot(x)
-5.     └─ggplot2:::by_layer(...)
-6.       ├─rlang::try_fetch(...)
-7.       │ ├─base::tryCatch(...)
-8.       │ │ └─base (local) tryCatchList(expr, classes, parentenv, handlers)
-9.       │ │   └─base (local) tryCatchOne(expr, names, parentenv, handlers[[1L]])
-10.       │ │     └─base (local) doTryCatch(return(expr), name, parentenv, handler)
-11.       │ └─base::withCallingHandlers(...)
-12.       └─ggplot2 (local) f(l = layers[[i]], d = data[[i]])
-13.         └─l$compute_aesthetics(d, plot)
-14.           └─ggplot2 (local) compute_aesthetics(..., self = self)
-15.             └─ggplot2:::check_aesthetics(evaled, n)
