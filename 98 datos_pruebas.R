@@ -149,6 +149,7 @@ library(syuzhet)
 library(caret)
 library(udpipe)
 library(writexl)
+library(ggplot2)
 
 # 1. Cargar el archivo Excel y renombrar la columna
 ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas abiertas.xlsx"
@@ -171,31 +172,45 @@ df_limpio <- df %>%
          word = stem_strings(word, language = "es"))
 
 # 3. Agregar de nuevo la columna original `Respuesta_Abierta` a df_limpio para el análisis de sentimientos
-# Vamos a mantener el `doc_id` y la `Respuesta_Abierta` original en df_limpio
 df_limpio <- df_limpio %>%
   left_join(df %>% select(doc_id, Respuesta_Abierta), by = "doc_id")
 
 # 4. Análisis de sentimientos utilizando `syuzhet` (diccionario NRC)
-# Ahora usamos la columna original de respuestas para el análisis de sentimientos
 sentimientos <- get_nrc_sentiment(df_limpio$Respuesta_Abierta)
 
 # 5. Ver los resultados del análisis de sentimientos
 if (ncol(sentimientos) > 0) {
-  df_limpio$sentimiento <- ifelse(sentimientos$negative > sentimientos$positive, "Negativo", "Positivo")
+  df_limpio$sentimiento <- ifelse(sentimientos$negative > sentimientos$positive, "Negativo", 
+                                  ifelse(sentimientos$positive > sentimientos$negative, "Positivo", "Neutro"))
 } else {
   warning("El análisis de sentimientos no produjo resultados válidos.")
 }
 
-# 6. Agregar las respuestas negativas a un nuevo archivo Excel
-df_negativos <- df_limpio %>%
-  filter(sentimiento == "Negativo") %>%
+# 6. Guardar todas las clasificaciones en un nuevo archivo Excel
+df_resultados <- df_limpio %>%
   select(doc_id, Respuesta_Abierta, sentimiento)
 
-# Especificar la nueva ruta para guardar el archivo
-write_xlsx(df_negativos, path = "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas_Negativas_ML.xlsx")
+# Especificar la nueva ruta para guardar el archivo con todas las clasificaciones
+write_xlsx(df_resultados, path = "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas_Clasificadas.xlsx")
 
-# 7. Ver los primeros resultados
-head(df_negativos)
+# 7. Crear gráficos visuales
+# Gráfico de distribución de sentimientos
+grafico_sentimientos <- df_limpio %>%
+  ggplot(aes(x = sentimiento)) +
+  geom_bar(fill = c("blue", "red", "gray")) +
+  theme_minimal() +
+  labs(title = "Distribución de Sentimientos en Respuestas Abiertas",
+       x = "Sentimiento", y = "Cantidad de Respuestas")
+
+# Gráfico de barras para mostrar la frecuencia de sentimientos
+print(grafico_sentimientos)
+
+# 8. Guardar el gráfico en un archivo (opcional)
+ggsave("C:/Users/racl26345/Documents/Tablas para Automatizaciones/Distribucion_Sentimientos.png", plot = grafico_sentimientos)
+
+# 9. Ver los primeros resultados
+head(df_resultados)
+
 
 
 
