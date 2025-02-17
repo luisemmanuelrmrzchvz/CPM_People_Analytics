@@ -256,3 +256,138 @@ write_xlsx(df_promedio, "C:/Users/racl26345/Documents/Tablas para Automatizacion
 
 ############################################################
 
+> # Cargar las librerías necesarias
+  > library(readxl)
+Aviso:
+  package ‘readxl’ was built under R version 4.4.2 
+> library(tidyverse)
+── Attaching core tidyverse packages ──────────────────────────────────────────────────────────────────────────────────────────────────────── tidyverse 2.0.0 ──
+✔ dplyr     1.1.4     ✔ readr     2.1.5
+✔ forcats   1.0.0     ✔ stringr   1.5.1
+✔ ggplot2   3.5.1     ✔ tibble    3.2.1
+✔ lubridate 1.9.4     ✔ tidyr     1.3.1
+✔ purrr     1.0.2     
+── Conflicts ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── tidyverse_conflicts() ──
+✖ dplyr::filter() masks stats::filter()
+✖ dplyr::lag()    masks stats::lag()
+ℹ Use the conflicted package to force all conflicts to become errors
+Avisos:
+  1: package ‘tidyverse’ was built under R version 4.4.2 
+2: package ‘ggplot2’ was built under R version 4.4.2 
+3: package ‘tidyr’ was built under R version 4.4.2 
+4: package ‘readr’ was built under R version 4.4.2 
+5: package ‘purrr’ was built under R version 4.4.2 
+6: package ‘dplyr’ was built under R version 4.4.2 
+7: package ‘forcats’ was built under R version 4.4.2 
+8: package ‘lubridate’ was built under R version 4.4.2 
+> library(tm)
+Cargando paquete requerido: NLP
+
+Adjuntando el paquete: ‘NLP’
+
+The following object is masked from ‘package:ggplot2’:
+  
+  annotate
+
+Avisos:
+  1: package ‘tm’ was built under R version 4.4.2 
+2: package ‘NLP’ was built under R version 4.4.2 
+> library(tidytext)
+Aviso:
+  package ‘tidytext’ was built under R version 4.4.2 
+> library(syuzhet)
+Aviso:
+  package ‘syuzhet’ was built under R version 4.4.2 
+> library(caret)
+Cargando paquete requerido: lattice
+
+Adjuntando el paquete: ‘caret’
+
+The following object is masked from ‘package:purrr’:
+  
+  lift
+
+Aviso:
+  package ‘caret’ was built under R version 4.4.2 
+> library(udpipe)
+Aviso:
+  package ‘udpipe’ was built under R version 4.4.2 
+> library(writexl)
+Aviso:
+  package ‘writexl’ was built under R version 4.4.2 
+> library(ggplot2)
+> 
+  > # 1. Cargar el archivo Excel, omitiendo la primera fila (título) y solo considerando los registros (no la pregunta)
+  > ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas abiertas.xlsx"
+> df <- read_excel(ruta_archivo, col_names = FALSE)
+New names:
+  • `` -> `...1`
+> 
+  > # Filtrar la primera fila que es la pregunta
+  > df <- df[-1, ]
+> colnames(df) <- c("Respuesta_Abierta")
+> 
+  > # 2. Filtrar respuestas con menos de 4 palabras y categorizar como "Neutro_Directo"
+  > df <- df %>%
+  +   filter(!is.na(Respuesta_Abierta) & Respuesta_Abierta != "") %>%
+  +   mutate(doc_id = row_number(),
+             +          num_palabras = str_count(Respuesta_Abierta, "\\w+"),
+             +          sentimiento = if_else(num_palabras < 4, "Neutro_Directo", NA_character_))
+> 
+  > # 3. Filtrar solo las respuestas con más de 3 palabras (para análisis de sentimientos)
+  > df_modelo <- df %>%
+  +   filter(num_palabras >= 4)
+> 
+  > # 4. Limpieza de datos y tokenización (solo para respuestas de más de 4 palabras)
+  > df_limpio <- df_modelo %>%
+  +   mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),
+             +          Respuesta_Abierta = removePunctuation(Respuesta_Abierta),
+             +          Respuesta_Abierta = removeNumbers(Respuesta_Abierta),
+             +          Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>%
+  +   unnest_tokens(word, Respuesta_Abierta) %>%
+  +   filter(!word %in% stopwords("es")) %>%
+  +   mutate(word = lemmatize_strings(word, language = "es"),
+             +          word = stem_strings(word, language = "es"))
+Error in `mutate()`:
+  ℹ In argument: `word = lemmatize_strings(word, language = "es")`.
+Caused by error in `lemmatize_strings()`:
+  ! no se pudo encontrar la función "lemmatize_strings"
+Run `rlang::last_trace()` to see where the error occurred.
+> rlang::last_trace()
+<error/dplyr:::mutate_error>
+  Error in `mutate()`:
+  ℹ In argument: `word = lemmatize_strings(word, language = "es")`.
+Caused by error in `lemmatize_strings()`:
+  ! no se pudo encontrar la función "lemmatize_strings"
+---
+  Backtrace:
+  ▆
+1. ├─... %>% ...
+2. ├─dplyr::mutate(...)
+3. └─dplyr:::mutate.data.frame(...)
+4.   └─dplyr:::mutate_cols(.data, dplyr_quosures(...), by)
+5.     ├─base::withCallingHandlers(...)
+6.     └─dplyr:::mutate_col(dots[[i]], data, mask, new_columns)
+7.       └─mask$eval_all_mutate(quo)
+8.         └─dplyr (local) eval()
+Run rlang::last_trace(drop = FALSE) to see 3 hidden frames.
+> rlang::last_trace(drop = FALSE)
+<error/dplyr:::mutate_error>
+  Error in `mutate()`:
+  ℹ In argument: `word = lemmatize_strings(word, language = "es")`.
+Caused by error in `lemmatize_strings()`:
+  ! no se pudo encontrar la función "lemmatize_strings"
+---
+  Backtrace:
+  ▆
+1. ├─... %>% ...
+2. ├─dplyr::mutate(...)
+3. ├─dplyr:::mutate.data.frame(...)
+4. │ └─dplyr:::mutate_cols(.data, dplyr_quosures(...), by)
+5. │   ├─base::withCallingHandlers(...)
+6. │   └─dplyr:::mutate_col(dots[[i]], data, mask, new_columns)
+7. │     └─mask$eval_all_mutate(quo)
+8. │       └─dplyr (local) eval()
+9. └─base::.handleSimpleError(...)
+10.   └─dplyr (local) h(simpleError(msg, call))
+11.     └─rlang::abort(message, class = error_class, parent = parent, call = error_call)
