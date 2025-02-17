@@ -207,14 +207,18 @@ df_resultados <- df %>%
 # 9. Eliminar registros duplicados (si existieran)
 df_resultados <- df_resultados %>% distinct()
 
-# 10. Guardar los resultados en un archivo Excel con registros únicos
+# 10. Verificar y reemplazar valores NA en la columna sentimiento
+df_resultados$sentimiento[is.na(df_resultados$sentimiento)] <- "Neutro"
+
+# 11. Guardar los resultados en un archivo Excel con registros únicos
 write_xlsx(df_resultados, path = "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas_Clasificadas.xlsx")
 
-# 11. Crear gráficos visuales
+# 12. Crear gráficos visuales
 # Gráfico de distribución de sentimientos
 grafico_sentimientos <- df_resultados %>%
   ggplot(aes(x = sentimiento)) +
-  geom_bar(fill = c("blue", "red", "gray")) +
+  geom_bar(aes(fill = sentimiento)) +  # Asociamos 'fill' con 'sentimiento'
+  scale_fill_manual(values = c("Positivo" = "blue", "Negativo" = "red", "Neutro" = "gray")) +  # Colores para cada sentimiento
   theme_minimal() +
   labs(title = "Distribución de Sentimientos en Respuestas Abiertas",
        x = "Sentimiento", y = "Cantidad de Respuestas")
@@ -222,132 +226,8 @@ grafico_sentimientos <- df_resultados %>%
 # Mostrar el gráfico
 print(grafico_sentimientos)
 
-# 12. Guardar el gráfico en un archivo (opcional)
-ggsave("C:/Users/racl26345/Documents/Tablas para Automatizaciones/Distribucion_Sentimientos.png", plot = grafico_sentimientos)
-
-# 13. Ver los primeros resultados
-head(df_resultados)
-
 
 
 
 ############################################################
 
-> # Cargar las librerías necesarias
-  > library(readxl)
-> library(tidyverse)
-> library(tm)
-> library(tidytext)
-> library(syuzhet)
-> library(caret)
-> library(udpipe)
-> library(writexl)
-> library(ggplot2)
-> 
-  > # 1. Cargar el archivo Excel, omitiendo la primera fila (título)
-  > ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas abiertas.xlsx"
-> df <- read_excel(ruta_archivo, col_names = FALSE)
-New names:
-  • `` -> `...1`
-> 
-  > # Eliminar la primera fila (título)
-  > df <- df[-1, ]
-> 
-  > # Renombrar la columna
-  > colnames(df) <- c("Respuesta_Abierta")
-> 
-  > # 2. Filtrar respuestas con menos de 4 palabras y categorizar como "Neutro_Directo"
-  > df <- df %>%
-  +   filter(!is.na(Respuesta_Abierta) & Respuesta_Abierta != "") %>%
-  +   mutate(doc_id = row_number(),
-             +          num_palabras = str_count(Respuesta_Abierta, "\\w+"),
-             +          sentimiento = if_else(num_palabras < 4, "Neutro_Directo", NA_character_))
-> 
-  > # 3. Filtrar solo las respuestas con más de 3 palabras (para análisis de sentimientos)
-  > df_modelo <- df %>%
-  +   filter(num_palabras >= 4)
-> 
-  > # 4. Limpieza de datos y tokenización (solo para respuestas de más de 4 palabras)
-  > df_limpio <- df_modelo %>%
-  +   mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),
-             +          Respuesta_Abierta = removePunctuation(Respuesta_Abierta),
-             +          Respuesta_Abierta = removeNumbers(Respuesta_Abierta),
-             +          Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>%
-  +   unnest_tokens(word, Respuesta_Abierta) %>%
-  +   filter(!word %in% stopwords("es")) %>%
-  +   mutate(word = lemmatize_strings(word, language = "es"),
-             +          word = stem_strings(word, language = "es"))
-> 
-  > # 5. Agregar la columna original `Respuesta_Abierta` a `df_limpio` para análisis de sentimientos
-  > df_limpio <- df_limpio %>%
-  +   left_join(df %>% select(doc_id, Respuesta_Abierta), by = "doc_id")
-> 
-  > # 6. Análisis de sentimientos utilizando `syuzhet` (diccionario NRC) para las respuestas mayores a 3 palabras
-  > sentimientos <- get_nrc_sentiment(df_limpio$Respuesta_Abierta)
-> 
-  > # 7. Clasificación de sentimientos (Positivo, Negativo, Neutro) para las respuestas mayores a 3 palabras
-  > if (ncol(sentimientos) > 0) {
-    +   df_limpio$sentimiento <- ifelse(sentimientos$negative > sentimientos$positive, "Negativo", 
-                                        +                                   ifelse(sentimientos$positive > sentimientos$negative, "Positivo", "Neutro"))
-    + } else {
-      +   warning("El análisis de sentimientos no produjo resultados válidos.")
-      + }
-> 
-  > # 8. Unir los datos de respuestas con clasificación directa ("Neutro_Directo") y modelo
-  > df_resultados <- df %>%
-  +   filter(is.na(sentimiento)) %>%
-  +   mutate(sentimiento = "Neutro_Directo") %>%
-  +   bind_rows(df_limpio %>% select(doc_id, Respuesta_Abierta, sentimiento))
-> 
-  > # 9. Eliminar registros duplicados (si existieran)
-  > df_resultados <- df_resultados %>% distinct()
-> 
-  > # 10. Guardar los resultados en un archivo Excel con registros únicos
-  > write_xlsx(df_resultados, path = "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas_Clasificadas.xlsx")
-> 
-  > # 11. Crear gráficos visuales
-  > # Gráfico de distribución de sentimientos
-  > grafico_sentimientos <- df_resultados %>%
-  +   ggplot(aes(x = sentimiento)) +
-  +   geom_bar(fill = c("blue", "red", "gray")) +
-  +   theme_minimal() +
-  +   labs(title = "Distribución de Sentimientos en Respuestas Abiertas",
-           +        x = "Sentimiento", y = "Cantidad de Respuestas")
-> 
-  > # Mostrar el gráfico
-  > print(grafico_sentimientos)
-Error in `geom_bar()`:
-  ! Problem while setting up geom aesthetics.
-ℹ Error occurred in the 1st layer.
-Caused by error in `check_aesthetics()`:
-  ! Aesthetics must be either length 1 or the same as the data (4).
-✖ Fix the following mappings: `fill`.
-Run `rlang::last_trace()` to see where the error occurred.
-> rlang::last_trace()
-<error/rlang_error>
-  Error in `geom_bar()`:
-  ! Problem while setting up geom aesthetics.
-ℹ Error occurred in the 1st layer.
-Caused by error in `check_aesthetics()`:
-  ! Aesthetics must be either length 1 or the same as the data (4).
-✖ Fix the following mappings: `fill`.
----
-  Backtrace:
-  ▆
-1. ├─base::print(grafico_sentimientos)
-2. └─ggplot2:::print.ggplot(grafico_sentimientos)
-3.   ├─ggplot2::ggplot_build(x)
-4.   └─ggplot2:::ggplot_build.ggplot(x)
-5.     └─ggplot2:::by_layer(...)
-6.       ├─rlang::try_fetch(...)
-7.       │ ├─base::tryCatch(...)
-8.       │ │ └─base (local) tryCatchList(expr, classes, parentenv, handlers)
-9.       │ │   └─base (local) tryCatchOne(expr, names, parentenv, handlers[[1L]])
-10.       │ │     └─base (local) doTryCatch(return(expr), name, parentenv, handler)
-11.       │ └─base::withCallingHandlers(...)
-12.       └─ggplot2 (local) f(l = layers[[i]], d = data[[i]])
-13.         └─l$compute_geom_2(d)
-14.           └─ggplot2 (local) compute_geom_2(..., self = self)
-15.             └─self$geom$use_defaults(data, self$aes_params, modifiers)
-16.               └─ggplot2 (local) use_defaults(..., self = self)
-17.                 └─ggplot2:::check_aesthetics(new_params, nrow(data))
