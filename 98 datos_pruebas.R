@@ -41,27 +41,26 @@ print("Datos insertados en la base de datos correctamente.")
 
 
 # Cargar las librerías necesarias
-library(readxl)       # Para leer archivos Excel
-library(tidyverse)    # Para manipulación de datos
-library(tm)           # Para procesamiento de texto
-library(tidytext)     # Para tokenización y análisis de texto
-library(syuzhet)      # Para análisis de sentimientos
-library(topicmodels)  # Para modelado de tópicos
-library(ggplot2)      # Para visualización
-library(textstem)     # Para lematización
-library(widyr)        # Para n-gramas
-library(writexl)      # Para exportar a Excel
-library(igraph)       # Para redes de bigramas
-library(ggraph)       # Para visualizar redes
-library(udpipe)       # Para lematización y análisis de dependencias
-library(spacyr)       # Para análisis avanzado de texto (opcional)
+library(readxl)
+library(tidyverse)
+library(tm)
+library(tidytext)
+library(syuzhet)
+library(topicmodels)
+library(ggplot2)
+library(textstem)
+library(widyr)
+library(writexl)
+library(igraph)
+library(ggraph)
+library(udpipe)
+library(spacyr)
 
 # 1. Cargar el archivo Excel y renombrar la columna
 ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas abiertas.xlsx"
-df <- read_excel(ruta_archivo, col_names = FALSE)  # Leer sin nombres de columna
-colnames(df) <- c("Respuesta_Abierta")             # Asignar el nombre "Respuesta_Abierta"
+df <- read_excel(ruta_archivo, col_names = FALSE)
+colnames(df) <- c("Respuesta_Abierta")
 
-# Eliminar filas vacías y asignar un identificador de documento
 df <- df %>% 
   filter(!is.na(Respuesta_Abierta) & Respuesta_Abierta != "") %>%
   mutate(doc_id = row_number())
@@ -80,44 +79,17 @@ df_limpio <- df %>%
 word_counts <- df_limpio %>% count(word, sort = TRUE)
 print(head(word_counts, 10))
 
-# Gráfico de palabras más comunes
-word_counts %>%
-  filter(n > 50) %>%
-  ggplot(aes(x = reorder(word, n), y = n)) +
-  geom_bar(stat = "identity", fill = "steelblue") +
-  coord_flip() +
-  labs(title = "Palabras más comunes en respuestas abiertas",
-       subtitle = "Frecuencia de palabras",
-       x = "Palabra", y = "Frecuencia") +
-  theme_minimal() +
-  theme(plot.title = element_text(face = "bold", size = 16),
-        axis.text = element_text(size = 12),
-        axis.title = element_text(size = 14))
-
 # 4. Análisis de Emociones Específicas
-# Cargar el léxico de sentimientos en español
 lexicon_es <- get_sentiment_dictionary("nrc", language = "spanish")
 
-# Asignar polaridad (positiva/negativa) a cada palabra
 df_polaridad <- df_limpio %>%
   inner_join(lexicon_es, by = c("word" = "word"), relationship = "many-to-many") %>%
   group_by(doc_id) %>%
   summarise(polaridad = sum(value, na.rm = TRUE))
 
-# Unir la polaridad al dataframe original
 df <- df %>%
   left_join(df_polaridad, by = "doc_id")
 
-# Visualizar la distribución de polaridad (excluyendo NA)
-df %>%
-  filter(!is.na(polaridad)) %>%
-  ggplot(aes(x = polaridad)) +
-  geom_histogram(binwidth = 1, fill = "steelblue") +
-  labs(title = "Distribución de Polaridad en las Respuestas",
-       x = "Polaridad", y = "Frecuencia") +
-  theme_minimal()
-
-# Filtrar respuestas con polaridad negativa para revisión manual
 df_negativos <- df %>%
   filter(polaridad < 0) %>%
   select(doc_id, Respuesta_Abierta, polaridad)
@@ -125,7 +97,6 @@ df_negativos <- df %>%
 write_xlsx(df_negativos, path = "Respuestas_Negativas.xlsx")
 
 # 5. Análisis de Redes Semánticas
-# Extraer trigramas
 trigramas <- df %>%
   mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),
          Respuesta_Abierta = removePunctuation(Respuesta_Abierta),
@@ -140,62 +111,13 @@ trigramas <- df %>%
   unite(trigrama, palabra1, palabra2, palabra3, sep = " ") %>%
   count(trigrama, sort = TRUE)
 
-# Visualizar trigramas más comunes
-trigramas %>%
-  filter(n > 10) %>%
-  ggplot(aes(x = reorder(trigrama, n), y = n)) +
-  geom_bar(stat = "identity", fill = "orange") +
-  coord_flip() +
-  labs(title = "Trigramas más comunes en respuestas abiertas",
-       x = "Trigrama", y = "Frecuencia") +
-  theme_minimal()
-
-# Análisis de co-ocurrencia de palabras
-co_ocurrencia <- df_limpio %>%
-  pairwise_count(word, doc_id, sort = TRUE)
-
-# Filtrar las aristas con mayor peso (n) para simplificar el grafo
-co_ocurrencia_filtrado <- co_ocurrencia %>%
-  filter(n > 10)  # Ajusta este umbral según sea necesario
-
-# Crear el grafo a partir del dataframe filtrado
-co_ocurrencia_graph <- graph_from_data_frame(co_ocurrencia_filtrado, directed = FALSE)
-
-# Verificar el grafo
-print(co_ocurrencia_graph)
-
-# Visualizar la red de co-ocurrencia
-ggraph(co_ocurrencia_graph, layout = "fr") +
-  geom_edge_link(aes(edge_alpha = n), show.legend = FALSE, color = "gray") +
-  geom_node_point(color = "darkred", size = 3) +
-  geom_node_text(aes(label = name), vjust = 1.5, size = 3, check_overlap = TRUE) +
-  theme_minimal() +
-  labs(title = "Red de Co-Ocurrencia de Palabras",
-       subtitle = "Relaciones entre palabras que aparecen juntas")
-
-# 6. Uso de Modelos de Lenguaje Avanzados (Alternativa a BERT en R)
-# Usar udpipe para lematización y análisis de dependencias
-
-# Intentar descargar el modelo de nuevo
+# 6. Uso de Modelos de Lenguaje Avanzados
 modelo_udpipe <- udpipe_download_model(language = "spanish", model_dir = "C:/Users/racl26345/Documents/DataBases/")
-
-# Si la descarga manual fue necesaria, carga el modelo desde la ruta especificada
 modelo_udpipe <- udpipe_load_model(file = "C:/Users/racl26345/Documents/DataBases/udpipe/spanish-gsd-ud-2.5-191206.udpipe")
 
-# Anotar el texto con udpipe
 df_anotado <- udpipe_annotate(modelo_udpipe, x = df$Respuesta_Abierta)
 df_anotado <- as.data.frame(df_anotado)
 
-# Realizar clustering basado en las anotaciones
-# (Aquí puedes agregar tu lógica de clustering basada en las anotaciones)
-
-# Visualizar la distribución de clusters
-ggplot(df, aes(x = as.factor(cluster), fill = as.factor(cluster))) +
-  geom_bar() +
-  labs(title = "Distribución de Clusters", x = "Cluster", y = "Frecuencia") +
-  theme_minimal()
-
-# Mostrar palabras clave por cluster
 palabras_por_cluster <- df_limpio %>%
   left_join(df %>% select(doc_id, cluster), by = "doc_id") %>%
   group_by(cluster, word) %>%
@@ -204,32 +126,9 @@ palabras_por_cluster <- df_limpio %>%
 
 print(palabras_por_cluster)
 
+
 ####################################################################################
 ####################################################################################
 ####################################################################################
 ####################################################################################
 
-> remove.packages("udpipe")
-Removing package from ‘C:/Users/racl26345/AppData/Local/R/win-library/4.4’
-(as ‘lib’ is unspecified)
-> install.packages(udpipe)
-Error in install.packages : cannot coerce type 'closure' to vector of type 'any'
-> install.packages("udpipe")
-Error in install.packages : Updating loaded packages
-
-Restarting R session...
-
-> install.packages("udpipe")
-WARNING: Rtools is required to build R packages but is not currently installed. Please download and install the appropriate version of Rtools before proceeding:
-  
-  https://cran.rstudio.com/bin/windows/Rtools/
-  Installing package into ‘C:/Users/racl26345/AppData/Local/R/win-library/4.4’
-(as ‘lib’ is unspecified)
-probando la URL 'https://cran.rstudio.com/bin/windows/contrib/4.4/udpipe_0.8.11.zip'
-Content type 'application/zip' length 4509785 bytes (4.3 MB)
-downloaded 4.3 MB
-
-package ‘udpipe’ successfully unpacked and MD5 sums checked
-
-The downloaded binary packages are in
-C:\Users\racl26345\AppData\Local\Temp\RtmpULgulM\downloaded_packages
