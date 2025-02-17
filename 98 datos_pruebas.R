@@ -138,3 +138,74 @@ print(palabras_por_cluster)
 ####################################################################################
 ####################################################################################
 
+# Cargar las librerías necesarias
+library(readxl)
+library(tidyverse)
+library(tm)
+library(tidytext)
+library(syuzhet)
+library(textstem)  # Para stemming y lematización
+library(widyr)
+library(writexl)
+library(udpipe)
+
+# 1. Cargar el archivo Excel y renombrar la columna
+ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas abiertas.xlsx"
+df <- read_excel(ruta_archivo, col_names = FALSE)
+colnames(df) <- c("Respuesta_Abierta")
+
+df <- df %>% 
+  filter(!is.na(Respuesta_Abierta) & Respuesta_Abierta != "") %>% 
+  mutate(doc_id = row_number())
+
+# 2. Limpieza de datos y tokenización
+df_limpio <- df %>%
+  mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),
+         Respuesta_Abierta = removePunctuation(Respuesta_Abierta),
+         Respuesta_Abierta = removeNumbers(Respuesta_Abierta),
+         Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>%
+  unnest_tokens(word, Respuesta_Abierta) %>%
+  filter(!word %in% stopwords("es")) %>%
+  mutate(word = lemmatize_strings(word, language = "es"),  # Lematización
+         word = stem_strings(word, language = "es"))       # Stemming
+
+# 3. Cargar y combinar múltiples diccionarios de sentimientos
+lexicon_nrc <- get_sentiment_dictionary("nrc", language = "spanish")
+lexicon_afinn <- get_sentiment_dictionary("afinn", language = "spanish")
+lexicon_bing <- get_sentiment_dictionary("bing", language = "spanish")
+
+# Unir todos los diccionarios en uno solo
+lexicon_combinado <- bind_rows(
+  lexicon_nrc %>% mutate(source = "nrc"),
+  lexicon_afinn %>% mutate(source = "afinn"),
+  lexicon_bing %>% mutate(source = "bing")
+)
+
+# 4. Análisis de polaridad con el diccionario combinado
+df_polaridad <- df_limpio %>%
+  inner_join(lexicon_combinado, by = "word", relationship = "many-to-many") %>%
+  group_by(doc_id) %>%
+  summarise(polaridad = sum(value, na.rm = TRUE))
+
+df <- df %>%
+  left_join(df_polaridad, by = "doc_id")
+
+# 5. Identificar respuestas negativas
+df_negativos <- df %>%
+  filter(polaridad < 0) %>%
+  select(doc_id, Respuesta_Abierta, polaridad)
+
+write_xlsx(df_negativos, path = "Respuestas_Negativas.xlsx")
+
+# 6. Crear la columna `cluster` basada en la polaridad
+df <- df %>%
+  mutate(cluster = ifelse(polaridad < 0, "Negativo", "Positivo"))
+
+# 7. Análisis de palabras más frecuentes en cada cluster
+palabras_por_cluster <- df_limpio %>%
+  left_join(df %>% select(doc_id, cluster), by = "doc_id") %>%
+  group_by(cluster, word) %>%
+  summarise(n = n(), .groups = 'drop') %>%
+  top_n(10, n)
+
+print(palabras_por_cluster)
