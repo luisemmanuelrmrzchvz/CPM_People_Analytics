@@ -218,20 +218,15 @@ proporcion <- df %>%
 
 print(proporcion)
 
-# 10. Frecuencias de palabras para respuestas "Neutro_Directo"
-# Top 15 palabras más comunes
-top_palabras <- df_limpio %>%
-  count(word, sort = TRUE) %>%
-  top_n(15)
-
-# Gráfico de frecuencias de palabras (Top 15 más frecuentes)
-ggplot(top_palabras, aes(x = reorder(word, n), y = n)) +
-  geom_bar(stat = "identity", fill = "skyblue") +
-  coord_flip() +
-  labs(title = "Frecuencia de Palabras (Top 15)") +
+# Gráfico de la proporción "Neutro_Directo" vs "Entran a Modelo"
+ggplot(proporcion, aes(x = c("Neutro_Directo", "Entran a Modelo"), 
+                      y = c(Porcentaje_Neutro_Directo, Porcentaje_Entran_a_Modelo), fill = c("Neutro_Directo", "Entran a Modelo"))) +
+  geom_bar(stat = "identity") +
+  labs(title = "Proporción de Neutro_Directo vs Entran a Modelo", x = "Categoría", y = "Porcentaje") +
+  scale_fill_manual(values = c("Neutro_Directo" = "lightblue", "Entran a Modelo" = "lightgreen")) +
   theme_minimal()
 
-# 11. Análisis de Bigramas
+# 10. Análisis de Bigramas
 # Análisis de bigramas, evitando el valor "N/A"
 bigrama <- df_limpio %>%
   unnest_tokens(bigram, word, token = "ngrams", n = 2) %>%
@@ -241,6 +236,7 @@ bigrama <- df_limpio %>%
 bigrama <- bigrama %>%
   filter(n > 0)
 
+# Verificar el motivo de bigramas N/A (probablemente causado por ausencia de tokenización válida)
 if (nrow(bigrama) > 0) {
   ggplot(bigrama, aes(x = reorder(bigram, n), y = n)) +
     geom_bar(stat = "identity", fill = "lightgreen") +
@@ -248,22 +244,36 @@ if (nrow(bigrama) > 0) {
     labs(title = "Frecuencia de Bigramas") +
     theme_minimal()
 } else {
-  print("No se encontraron bigramas válidos.")
+  print("No se encontraron bigramas válidos. Revisar el proceso de tokenización o los datos.")
 }
 
-# 12. Gráfico de distribución de sentimientos (Negativo, Neutro, Positivo, Muy Positivo, Muy Negativo)
-ggplot(df_limpio, aes(x = sentimiento, fill = sentimiento)) +
+# 11. Gráfico de distribución de sentimientos (Negativo, Neutro, Positivo, Muy Positivo, Muy Negativo)
+ggplot(df_limpio, aes(x = factor(sentimiento, levels = c("Muy Negativo", "Negativo", "Neutro", "Positivo", "Muy Positivo")), fill = sentimiento)) +
   geom_bar() +
-  scale_fill_manual(values = c("Muy Positivo" = "blue", 
-                               "Positivo" = "green", 
-                               "Neutro" = "grey", 
+  scale_fill_manual(values = c("Muy Negativo" = "darkred", 
                                "Negativo" = "red", 
-                               "Muy Negativo" = "darkred")) +
+                               "Neutro" = "grey", 
+                               "Positivo" = "green", 
+                               "Muy Positivo" = "blue")) +
   labs(title = "Distribución de Sentimientos") +
   theme_minimal()
 
-# 13. Guardar los resultados en un archivo Excel
-write_xlsx(df_limpio, "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Resultados_Clasificacion_Sentimientos.xlsx")
+# 12. Guardar los resultados en un archivo Excel con clasificación promedio por registro
+# Crear una tabla de resumen por registro con el promedio de clasificación de sentimiento
+df_resumen <- df_limpio %>%
+  group_by(doc_id) %>%
+  summarise(Sentimiento_Promedio = mean(sentimiento_valor, na.rm = TRUE),
+            Sentimiento_Clasificado = case_when(
+              Sentimiento_Promedio <= -2 ~ "Muy Negativo",
+              Sentimiento_Promedio == -1 ~ "Negativo",
+              Sentimiento_Promedio == 0 ~ "Neutro",
+              Sentimiento_Promedio == 1 ~ "Positivo",
+              Sentimiento_Promedio >= 2 ~ "Muy Positivo",
+              TRUE ~ "Neutro"
+            ))
+
+write_xlsx(df_resumen, "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Resultados_Clasificacion_Sentimientos_Promedio.xlsx")
+
 
 
 
