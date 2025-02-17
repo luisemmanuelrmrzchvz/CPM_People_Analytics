@@ -301,3 +301,99 @@ print(grafico_sentimientos_amplio)
 
 ############################################################
 
+
+
+> # Cargar las librerías necesarias
+  > library(readxl)
+> library(tidyverse)
+> library(tm)
+> library(tidytext)
+> library(syuzhet)
+> library(caret)
+> library(udpipe)
+> library(writexl)
+> library(ggplot2)
+> 
+  > # 1. Cargar el archivo Excel, omitiendo la primera fila (título)
+  > ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas abiertas.xlsx"
+> df <- read_excel(ruta_archivo, col_names = FALSE)
+New names:
+  • `` -> `...1`
+> 
+  > # Eliminar la primera fila (título)
+  > df <- df[-1, ]
+> 
+  > # Renombrar la columna
+  > colnames(df) <- c("Respuesta_Abierta")
+> 
+  > # 2. Filtrar respuestas con menos de 4 palabras y categorizar como "Neutro_Directo"
+  > df <- df %>%
+  +   filter(!is.na(Respuesta_Abierta) & Respuesta_Abierta != "") %>%
+  +   mutate(doc_id = row_number(),
+             +          num_palabras = str_count(Respuesta_Abierta, "\\w+"),
+             +          sentimiento = if_else(num_palabras < 4, "Neutro_Directo", NA_character_))
+> 
+  > # 3. Filtrar solo las respuestas con más de 3 palabras (para análisis de sentimientos)
+  > df_modelo <- df %>%
+  +   filter(num_palabras >= 4)
+> 
+  > # 4. Limpieza de datos y tokenización (solo para respuestas de más de 4 palabras)
+  > df_limpio <- df_modelo %>%
+  +   mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),
+             +          Respuesta_Abierta = removePunctuation(Respuesta_Abierta),
+             +          Respuesta_Abierta = removeNumbers(Respuesta_Abierta),
+             +          Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>%
+  +   unnest_tokens(word, Respuesta_Abierta) %>%
+  +   filter(!word %in% stopwords("es")) %>%
+  +   mutate(word = lemmatize_strings(word, language = "es"),
+             +          word = stem_strings(word, language = "es"))
+> 
+  > # 5. Agregar la columna original `Respuesta_Abierta` a `df_limpio` para análisis de sentimientos
+  > df_limpio <- df_limpio %>%
+  +   left_join(df %>% select(doc_id, Respuesta_Abierta), by = "doc_id")
+> 
+  > # 6. Análisis de sentimientos utilizando `syuzhet` (diccionario NRC) para las respuestas mayores a 3 palabras
+  > sentimientos <- get_nrc_sentiment(df_limpio$Respuesta_Abierta)
+> 
+  > # 7. Clasificación de sentimientos (Positivo, Negativo, Neutro, con categorías más detalladas)
+  > if (ncol(sentimientos) > 0) {
+    +   df_limpio$sentimiento <- case_when(
+      +     sentimientos$positive > 0.75 ~ "Muy Positivo",
+      +     sentimientos$positive > 0 ~ "Positivo",
+      +     sentimientos$negative > 0.75 ~ "Muy Negativo",
+      +     sentimientos$negative > 0 ~ "Negativo",
+      +     TRUE ~ "Neutro"
+      +   )
+    +   
+      +   # Añadir columna de valor de sentimiento (puntaje)
+      +   df_limpio$sentimiento_valor <- sentiments$positive - sentiments$negative  # Puntaje de sentimiento
+      + } else {
+        +   warning("El análisis de sentimientos no produjo resultados válidos.")
+        + }
+Error in `$<-`:
+  ! Assigned data `sentiments$positive - sentiments$negative` must be compatible with existing data.
+✖ Existing data has 7320 rows.
+✖ Assigned data has 0 rows.
+ℹ Only vectors of size 1 are recycled.
+Caused by error in `vectbl_recycle_rhs_rows()`:
+  ! Can't recycle input of size 0 to size 7320.
+Run `rlang::last_trace()` to see where the error occurred.
+Avisos:
+1: Unknown or uninitialised column: `positive`. 
+2: Unknown or uninitialised column: `negative`. 
+> rlang::last_trace()
+<error/tibble_error_assign_incompatible_size>
+Error in `$<-`:
+! Assigned data `sentiments$positive - sentiments$negative` must be compatible with existing data.
+✖ Existing data has 7320 rows.
+✖ Assigned data has 0 rows.
+ℹ Only vectors of size 1 are recycled.
+Caused by error in `vectbl_recycle_rhs_rows()`:
+! Can't recycle input of size 0 to size 7320.
+---
+  Backtrace:
+  ▆
+1. ├─base::`$<-`(`*tmp*`, sentimiento_valor, value = `<int>`)
+2. └─tibble:::`$<-.tbl_df`(`*tmp*`, sentimiento_valor, value = `<int>`)
+3.   └─tibble:::tbl_subassign(...)
+4.     └─tibble:::vectbl_recycle_rhs_rows(value, fast_nrow(xo), i_arg = NULL, value_arg, call)
