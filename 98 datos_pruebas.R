@@ -112,16 +112,22 @@ trigramas <- df %>%
   count(trigrama, sort = TRUE)
 
 # 6. Uso de Modelos de Lenguaje Avanzados
-modelo_udpipe <- udpipe_download_model(language = "spanish", model_dir = "C:/Users/racl26345/Documents/DataBases/")
+# Cargar el modelo de lenguaje udpipe manualmente
 modelo_udpipe <- udpipe_load_model(file = "C:/Users/racl26345/Documents/DataBases/udpipe/spanish-gsd-ud-2.5-191206.udpipe")
 
+# Anotar el texto con el modelo udpipe
 df_anotado <- udpipe_annotate(modelo_udpipe, x = df$Respuesta_Abierta)
 df_anotado <- as.data.frame(df_anotado)
 
+# Crear la columna `cluster` basada en la polaridad
+df <- df %>%
+  mutate(cluster = ifelse(polaridad < 0, "Negativo", "Positivo"))
+
+# Análisis de palabras por cluster
 palabras_por_cluster <- df_limpio %>%
   left_join(df %>% select(doc_id, cluster), by = "doc_id") %>%
   group_by(cluster, word) %>%
-  summarise(n = n()) %>%
+  summarise(n = n(), .groups = 'drop') %>%
   top_n(10, n)
 
 print(palabras_por_cluster)
