@@ -151,17 +151,29 @@ library(udpipe)
 library(writexl)
 library(ggplot2)
 
-# 1. Cargar el archivo Excel y renombrar la columna
+# 1. Cargar el archivo Excel, omitiendo la primera fila (título)
 ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas abiertas.xlsx"
 df <- read_excel(ruta_archivo, col_names = FALSE)
+
+# Eliminar la primera fila (título)
+df <- df[-1, ]
+
+# Renombrar la columna
 colnames(df) <- c("Respuesta_Abierta")
 
-df <- df %>% 
-  filter(!is.na(Respuesta_Abierta) & Respuesta_Abierta != "") %>% 
-  mutate(doc_id = row_number())
+# 2. Filtrar respuestas con menos de 4 palabras y categorizar como "Neutro_Directo"
+df <- df %>%
+  filter(!is.na(Respuesta_Abierta) & Respuesta_Abierta != "") %>%
+  mutate(doc_id = row_number(),
+         num_palabras = str_count(Respuesta_Abierta, "\\w+"),
+         sentimiento = if_else(num_palabras < 4, "Neutro_Directo", NA_character_))
 
-# 2. Limpieza de datos y tokenización
-df_limpio <- df %>%
+# 3. Filtrar solo las respuestas con más de 3 palabras (para análisis de sentimientos)
+df_modelo <- df %>%
+  filter(num_palabras >= 4)
+
+# 4. Limpieza de datos y tokenización (solo para respuestas de más de 4 palabras)
+df_limpio <- df_modelo %>%
   mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),
          Respuesta_Abierta = removePunctuation(Respuesta_Abierta),
          Respuesta_Abierta = removeNumbers(Respuesta_Abierta),
@@ -171,14 +183,14 @@ df_limpio <- df %>%
   mutate(word = lemmatize_strings(word, language = "es"),
          word = stem_strings(word, language = "es"))
 
-# 3. Agregar de nuevo la columna original `Respuesta_Abierta` a df_limpio para el análisis de sentimientos
+# 5. Agregar la columna original `Respuesta_Abierta` a `df_limpio` para análisis de sentimientos
 df_limpio <- df_limpio %>%
   left_join(df %>% select(doc_id, Respuesta_Abierta), by = "doc_id")
 
-# 4. Análisis de sentimientos utilizando `syuzhet` (diccionario NRC)
+# 6. Análisis de sentimientos utilizando `syuzhet` (diccionario NRC) para las respuestas mayores a 3 palabras
 sentimientos <- get_nrc_sentiment(df_limpio$Respuesta_Abierta)
 
-# 5. Ver los resultados del análisis de sentimientos
+# 7. Clasificación de sentimientos (Positivo, Negativo, Neutro) para las respuestas mayores a 3 palabras
 if (ncol(sentimientos) > 0) {
   df_limpio$sentimiento <- ifelse(sentimientos$negative > sentimientos$positive, "Negativo", 
                                   ifelse(sentimientos$positive > sentimientos$negative, "Positivo", "Neutro"))
@@ -186,32 +198,35 @@ if (ncol(sentimientos) > 0) {
   warning("El análisis de sentimientos no produjo resultados válidos.")
 }
 
-# 6. Guardar todas las clasificaciones en un nuevo archivo Excel
-df_resultados <- df_limpio %>%
-  select(doc_id, Respuesta_Abierta, sentimiento)
+# 8. Unir los datos de respuestas con clasificación directa ("Neutro_Directo") y modelo
+df_resultados <- df %>%
+  filter(is.na(sentimiento)) %>%
+  mutate(sentimiento = "Neutro_Directo") %>%
+  bind_rows(df_limpio %>% select(doc_id, Respuesta_Abierta, sentimiento))
 
-# Especificar la nueva ruta para guardar el archivo con todas las clasificaciones
+# 9. Eliminar registros duplicados (si existieran)
+df_resultados <- df_resultados %>% distinct()
+
+# 10. Guardar los resultados en un archivo Excel con registros únicos
 write_xlsx(df_resultados, path = "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas_Clasificadas.xlsx")
 
-# 7. Crear gráficos visuales
+# 11. Crear gráficos visuales
 # Gráfico de distribución de sentimientos
-grafico_sentimientos <- df_limpio %>%
+grafico_sentimientos <- df_resultados %>%
   ggplot(aes(x = sentimiento)) +
   geom_bar(fill = c("blue", "red", "gray")) +
   theme_minimal() +
   labs(title = "Distribución de Sentimientos en Respuestas Abiertas",
        x = "Sentimiento", y = "Cantidad de Respuestas")
 
-# Gráfico de barras para mostrar la frecuencia de sentimientos
+# Mostrar el gráfico
 print(grafico_sentimientos)
 
-# 8. Guardar el gráfico en un archivo (opcional)
+# 12. Guardar el gráfico en un archivo (opcional)
 ggsave("C:/Users/racl26345/Documents/Tablas para Automatizaciones/Distribucion_Sentimientos.png", plot = grafico_sentimientos)
 
-# 9. Ver los primeros resultados
+# 13. Ver los primeros resultados
 head(df_resultados)
-
-
 
 
 
