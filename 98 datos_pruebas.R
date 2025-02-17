@@ -175,8 +175,12 @@ ggraph(co_ocurrencia_graph, layout = "fr") +
 
 # 6. Uso de Modelos de Lenguaje Avanzados (Alternativa a BERT en R)
 # Usar udpipe para lematización y análisis de dependencias
-modelo_udpipe <- udpipe_download_model(language = "spanish")
-modelo_udpipe <- udpipe_load_model(modelo_udpipe$file_model)
+
+# Intentar descargar el modelo de nuevo
+modelo_udpipe <- udpipe_download_model(language = "spanish", model_dir = "C:/Users/racl26345/Documents/DataBases/")
+
+# Si la descarga manual fue necesaria, carga el modelo desde la ruta especificada
+modelo_udpipe <- udpipe_load_model(file = "C:/Users/racl26345/Documents/DataBases/udpipe/spanish-gsd-ud-2.5-191206.udpipe")
 
 # Anotar el texto con udpipe
 df_anotado <- udpipe_annotate(modelo_udpipe, x = df$Respuesta_Abierta)
@@ -200,9 +204,107 @@ palabras_por_cluster <- df_limpio %>%
 
 print(palabras_por_cluster)
 
-
 ####################################################################################
 ####################################################################################
 ####################################################################################
 ####################################################################################
 
+> # 6. Uso de Modelos de Lenguaje Avanzados (Alternativa a BERT en R)
+  > # Usar udpipe para lematización y análisis de dependencias
+  > 
+  > # Intentar descargar el modelo de nuevo
+  > modelo_udpipe <- udpipe_download_model(language = "spanish", model_dir = "C:/Users/racl26345/Documents/DataBases/")
+Downloading udpipe model from https://raw.githubusercontent.com/jwijffels/udpipe.models.ud.2.5/master/inst/udpipe-ud-2.5-191206/spanish-gsd-ud-2.5-191206.udpipe to C:/Users/racl26345/Documents/DataBases//spanish-gsd-ud-2.5-191206.udpipe
+- This model has been trained on version 2.5 of data from https://universaldependencies.org
+- The model is distributed under the CC-BY-SA-NC license: https://creativecommons.org/licenses/by-nc-sa/4.0
+- Visit https://github.com/jwijffels/udpipe.models.ud.2.5 for model license details.
+- For a list of all models and their licenses (most models you can download with this package have either a CC-BY-SA or a CC-BY-SA-NC license) read the documentation at ?udpipe_download_model. For building your own models: visit the documentation by typing vignette('udpipe-train', package = 'udpipe')
+probando la URL 'https://raw.githubusercontent.com/jwijffels/udpipe.models.ud.2.5/master/inst/udpipe-ud-2.5-191206/spanish-gsd-ud-2.5-191206.udpipe'
+Something went wrong
+Error in utils::download.file(url = url, destfile = to, mode = "wb") : 
+  no fue posible abrir la URL 'https://raw.githubusercontent.com/jwijffels/udpipe.models.ud.2.5/master/inst/udpipe-ud-2.5-191206/spanish-gsd-ud-2.5-191206.udpipe'
+
+> 
+  > # Si la descarga manual fue necesaria, carga el modelo desde la ruta especificada
+  > modelo_udpipe <- udpipe_load_model(file = "C:/Users/racl26345/Documents/DataBases/udpipe/spanish-gsd-ud-2.5-191206.udpipe")
+> 
+  > # Anotar el texto con udpipe
+  > df_anotado <- udpipe_annotate(modelo_udpipe, x = df$Respuesta_Abierta)
+> df_anotado <- as.data.frame(df_anotado)
+> 
+  > # Realizar clustering basado en las anotaciones
+  > # (Aquí puedes agregar tu lógica de clustering basada en las anotaciones)
+  > 
+  > # Visualizar la distribución de clusters
+  > ggplot(df, aes(x = as.factor(cluster), fill = as.factor(cluster))) +
+  +   geom_bar() +
+  +   labs(title = "Distribución de Clusters", x = "Cluster", y = "Frecuencia") +
+  +   theme_minimal()
+Error in `geom_bar()`:
+  ! Problem while computing aesthetics.
+ℹ Error occurred in the 1st layer.
+Caused by error:
+  ! objeto 'cluster' no encontrado
+Run `rlang::last_trace()` to see where the error occurred.
+> rlang::last_trace()
+<error/rlang_error>
+  Error in `geom_bar()`:
+  ! Problem while computing aesthetics.
+ℹ Error occurred in the 1st layer.
+Caused by error:
+  ! objeto 'cluster' no encontrado
+---
+  Backtrace:
+  ▆
+1. ├─base (local) `<fn>`(x)
+2. ├─ggplot2:::print.ggplot(x)
+3. │ ├─ggplot2::ggplot_build(x)
+4. │ └─ggplot2:::ggplot_build.ggplot(x)
+5. │   └─ggplot2:::by_layer(...)
+6. │     ├─rlang::try_fetch(...)
+7. │     │ ├─base::tryCatch(...)
+8. │     │ │ └─base (local) tryCatchList(expr, classes, parentenv, handlers)
+9. │     │ │   └─base (local) tryCatchOne(expr, names, parentenv, handlers[[1L]])
+10. │     │ │     └─base (local) doTryCatch(return(expr), name, parentenv, handler)
+11. │     │ └─base::withCallingHandlers(...)
+12. │     └─ggplot2 (local) f(l = layers[[i]], d = data[[i]])
+13. │       └─l$compute_aesthetics(d, plot)
+14. │         └─ggplot2 (local) compute_aesthetics(..., self = self)
+15. │           └─base::lapply(aesthetics, eval_tidy, data = data, env = env)
+16. │             └─rlang (local) FUN(X[[i]], ...)
+17. └─base::as.factor(cluster)
+18.   └─base::is.factor(x)
+Run rlang::last_trace(drop = FALSE) to see 5 hidden frames.
+> rlang::last_trace(drop = FALSE)
+<error/rlang_error>
+  Error in `geom_bar()`:
+  ! Problem while computing aesthetics.
+ℹ Error occurred in the 1st layer.
+Caused by error:
+  ! objeto 'cluster' no encontrado
+---
+  Backtrace:
+  ▆
+1. ├─base (local) `<fn>`(x)
+2. ├─ggplot2:::print.ggplot(x)
+3. │ ├─ggplot2::ggplot_build(x)
+4. │ └─ggplot2:::ggplot_build.ggplot(x)
+5. │   └─ggplot2:::by_layer(...)
+6. │     ├─rlang::try_fetch(...)
+7. │     │ ├─base::tryCatch(...)
+8. │     │ │ └─base (local) tryCatchList(expr, classes, parentenv, handlers)
+9. │     │ │   └─base (local) tryCatchOne(expr, names, parentenv, handlers[[1L]])
+10. │     │ │     └─base (local) doTryCatch(return(expr), name, parentenv, handler)
+11. │     │ └─base::withCallingHandlers(...)
+12. │     └─ggplot2 (local) f(l = layers[[i]], d = data[[i]])
+13. │       └─l$compute_aesthetics(d, plot)
+14. │         └─ggplot2 (local) compute_aesthetics(..., self = self)
+15. │           └─base::lapply(aesthetics, eval_tidy, data = data, env = env)
+16. │             └─rlang (local) FUN(X[[i]], ...)
+17. ├─base::as.factor(cluster)
+18. │ └─base::is.factor(x)
+19. └─base::.handleSimpleError(...)
+20.   └─rlang (local) h(simpleError(msg, call))
+21.     └─handlers[[1L]](cnd)
+22.       └─cli::cli_abort(...)
+23.         └─rlang::abort(...)
