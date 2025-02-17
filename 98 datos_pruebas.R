@@ -149,12 +149,9 @@ library(udpipe)
 library(writexl)
 library(ggplot2)
 
-# 1. Cargar el archivo Excel, omitiendo la primera fila (título) y solo considerando los registros (no la pregunta)
+# 1. Cargar el archivo Excel, omitiendo la primera fila (título)
 ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas abiertas.xlsx"
 df <- read_excel(ruta_archivo, col_names = FALSE)
-
-# Filtrar la primera fila que es la pregunta
-df <- df[-1, ]
 colnames(df) <- c("Respuesta_Abierta")
 
 # 2. Filtrar respuestas con menos de 4 palabras y categorizar como "Neutro_Directo"
@@ -188,17 +185,20 @@ sentimientos <- get_nrc_sentiment(df_limpio$Respuesta_Abierta)
 
 # 7. Clasificación de sentimientos (Positivo, Negativo, Neutro, con categorías más detalladas)
 if (ncol(sentimientos) > 0) {
-  df_limpio$sentimiento_valor <- sentimientos$positive - sentimientos$negative  # Puntaje de sentimiento
-  
-  # Ajustar las categorías de sentimiento según el puntaje
   df_limpio$sentimiento <- case_when(
-    df_limpio$sentimiento_valor <= -2 ~ "Muy Negativo",
-    df_limpio$sentimiento_valor == -1 ~ "Negativo",
-    df_limpio$sentimiento_valor == 0 ~ "Neutro",
-    df_limpio$sentimiento_valor == 1 ~ "Positivo",
-    df_limpio$sentimiento_valor >= 2 ~ "Muy Positivo",
+    sentimientos$positive > 0.75 ~ "Muy Positivo",
+    sentimientos$positive > 0 ~ "Positivo",
+    sentimientos$negative > 0.75 ~ "Muy Negativo",
+    sentimientos$negative > 0 ~ "Negativo",
     TRUE ~ "Neutro"
   )
+  
+  # Añadir columna de valor de sentimiento (puntaje)
+  if ("positive" %in% colnames(sentimientos) && "negative" %in% colnames(sentimientos)) {
+    df_limpio$sentimiento_valor <- sentimientos$positive - sentimientos$negative  # Puntaje de sentimiento
+  } else {
+    warning("Las columnas 'positive' y 'negative' no están presentes en el análisis de sentimientos.")
+  }
 } else {
   warning("El análisis de sentimientos no produjo resultados válidos.")
 }
@@ -207,21 +207,28 @@ if (ncol(sentimientos) > 0) {
 df_neutro_directo <- df %>% filter(sentimiento == "Neutro_Directo")
 df_entrar_modelo <- df %>% filter(sentimiento != "Neutro_Directo")
 
-# 9. Calcular la proporción y volumen de "Neutro_Directo" vs "Entran a Modelo"
-proporcion <- df %>%
-  summarise(Neutro_Directo = sum(sentimiento == "Neutro_Directo"),
-            Entran_a_Modelo = sum(sentimiento != "Neutro_Directo")) %>%
-  mutate(Total = Neutro_Directo + Entran_a_Modelo,
-         Porcentaje_Neutro_Directo = Neutro_Directo / Total * 100,
-         Porcentaje_Entran_a_Modelo = Entran_a_Modelo / Total * 100)
-
-print(proporcion)
+# 9. Visualización de la proporción de "Neutro_Directo" vs "Entran a Modelo"
+# Gráfico de pastel para mostrar proporción de "Neutro_Directo" y registros "Entran a Modelo"
+ggplot(df, aes(x = "", fill = sentimiento)) +
+  geom_bar(width = 1) +
+  coord_polar(theta = "y") +
+  theme_void() +
+  labs(title = "Proporción de Neutro Directo vs Entran a Modelo")
 
 # 10. Frecuencias de palabras para respuestas "Neutro_Directo"
 # Top 15 palabras más comunes
 top_palabras <- df_limpio %>%
   count(word, sort = TRUE) %>%
   top_n(15)
+
+# Frecuencia de palabras fuera del top 15
+otros_palabras <- df_limpio %>%
+  count(word) %>%
+  filter(!word %in% top_palabras$word) %>%
+  summarise(otros = sum(n))
+
+# Combina el top 15 y el volumen de palabras fuera del top 15
+top_palabras <- bind_rows(top_palabras, tibble(word = "Otros", n = otros_palabras$otros))
 
 # Gráfico de frecuencias de palabras (Top 15 más frecuentes)
 ggplot(top_palabras, aes(x = reorder(word, n), y = n)) +
@@ -236,19 +243,16 @@ bigrama <- df_limpio %>%
   unnest_tokens(bigram, word, token = "ngrams", n = 2) %>%
   count(bigram, sort = TRUE)
 
-# Filtrar bigramas vacíos
+# Excluir bigramas "N/A"
 bigrama <- bigrama %>%
-  filter(n > 0)
+  filter(bigram != "NA NA")
 
-if (nrow(bigrama) > 0) {
-  ggplot(bigrama, aes(x = reorder(bigram, n), y = n)) +
-    geom_bar(stat = "identity", fill = "lightgreen") +
-    coord_flip() +
-    labs(title = "Frecuencia de Bigramas") +
-    theme_minimal()
-} else {
-  print("No se encontraron bigramas válidos.")
-}
+# Gráfico de bigramas
+ggplot(bigrama, aes(x = reorder(bigram, n), y = n)) +
+  geom_bar(stat = "identity", fill = "lightgreen") +
+  coord_flip() +
+  labs(title = "Frecuencia de Bigramas") +
+  theme_minimal()
 
 # 12. Gráfico de distribución de sentimientos (Negativo, Neutro, Positivo, Muy Positivo, Muy Negativo)
 ggplot(df_limpio, aes(x = sentimiento, fill = sentimiento)) +
