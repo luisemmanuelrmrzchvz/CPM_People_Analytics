@@ -138,6 +138,8 @@ print(palabras_por_cluster)
 ####################################################################################
 ####################################################################################
 
+
+
 # Cargar las librerías necesarias
 library(readxl)
 library(tidyverse)
@@ -168,135 +170,36 @@ df_limpio <- df %>%
   mutate(word = lemmatize_strings(word, language = "es"),
          word = stem_strings(word, language = "es"))
 
-# 3. Verificar que las respuestas están correctas después de la limpieza
-# Mantener la columna original `Respuesta_Abierta` para el análisis de sentimientos
-df_limpio$Respuesta_Abierta <- df$Respuesta_Abierta
+# 3. Agregar de nuevo la columna original `Respuesta_Abierta` a df_limpio para el análisis de sentimientos
+# Vamos a mantener el `doc_id` y la `Respuesta_Abierta` original en df_limpio
+df_limpio <- df_limpio %>%
+  left_join(df %>% select(doc_id, Respuesta_Abierta), by = "doc_id")
 
 # 4. Análisis de sentimientos utilizando `syuzhet` (diccionario NRC)
+# Ahora usamos la columna original de respuestas para el análisis de sentimientos
 sentimientos <- get_nrc_sentiment(df_limpio$Respuesta_Abierta)
 
-# Verificamos si el análisis se generó correctamente
+# 5. Ver los resultados del análisis de sentimientos
 if (ncol(sentimientos) > 0) {
-  df$sentimiento <- ifelse(sentimientos$negative > sentimientos$positive, "Negativo", "Positivo")
+  df_limpio$sentimiento <- ifelse(sentimientos$negative > sentimientos$positive, "Negativo", "Positivo")
 } else {
   warning("El análisis de sentimientos no produjo resultados válidos.")
 }
 
-# 5. Clasificación de Sentimientos (Machine Learning) con `caret`
-# Primero etiquetamos los sentimientos en positivo/negativo para el modelo
-df$sentimiento_categoria <- ifelse(df$sentimiento == "Positivo", "Positivo", 
-                                   ifelse(df$sentimiento == "Negativo", "Negativo", "Neutral"))
-
-# 6. Preprocesamiento para Machine Learning
-# Convertimos las respuestas en un formato adecuado para ML
-df_ml <- df %>%
-  mutate(Respuesta_Abierta = tolower(Respuesta_Abierta)) %>%
-  select(doc_id, Respuesta_Abierta, sentimiento_categoria)
-
-# Crear un "corpus" para el análisis de texto
-corpus <- Corpus(VectorSource(df_ml$Respuesta_Abierta))
-
-# Preprocesamiento de texto
-corpus <- tm_map(corpus, content_transformer(tolower))
-corpus <- tm_map(corpus, removePunctuation)
-corpus <- tm_map(corpus, removeNumbers)
-corpus <- tm_map(corpus, removeWords, stopwords("es"))
-corpus <- tm_map(corpus, stripWhitespace)
-
-# Crear una matriz de términos (DTM)
-dtm <- DocumentTermMatrix(corpus)
-
-# Convertir la DTM en un data.frame
-dtm_df <- as.data.frame(as.matrix(dtm))
-colnames(dtm_df) <- make.names(colnames(dtm_df))
-
-# Agregar la variable de etiqueta (sentimiento) al data.frame
-dtm_df$sentimiento_categoria <- df_ml$sentimiento_categoria
-
-# 7. Entrenamiento de modelo con `caret` (Random Forest)
-set.seed(123)
-
-# Entrenar el modelo usando Random Forest
-modelo_rf <- train(sentimiento_categoria ~ ., data = dtm_df, method = "rf", trControl = trainControl(method = "cv"))
-
-# Predicción con el modelo entrenado
-predicciones <- predict(modelo_rf, dtm_df)
-
-# Agregar predicciones al dataframe original
-df$sentimiento_predicho <- predicciones
-
-# 8. Ver los resultados
-head(df)
-
-# 9. Guardar las respuestas negativas en la nueva ubicación especificada
-df_negativos <- df %>%
-  filter(sentimiento_predicho == "Negativo") %>%
-  select(doc_id, Respuesta_Abierta, sentimiento_predicho)
+# 6. Agregar las respuestas negativas a un nuevo archivo Excel
+df_negativos <- df_limpio %>%
+  filter(sentimiento == "Negativo") %>%
+  select(doc_id, Respuesta_Abierta, sentimiento)
 
 # Especificar la nueva ruta para guardar el archivo
 write_xlsx(df_negativos, path = "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas_Negativas_ML.xlsx")
+
+# 7. Ver los primeros resultados
+head(df_negativos)
+
 
 
 
 
 ############################################################
 
-> # Cargar las librerías necesarias
-  > library(readxl)
-> library(tidyverse)
-> library(tm)
-> library(tidytext)
-> library(syuzhet)
-> library(caret)
-> library(udpipe)
-> library(writexl)
-> 
-  > # 1. Cargar el archivo Excel y renombrar la columna
-  > ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas abiertas.xlsx"
-> df <- read_excel(ruta_archivo, col_names = FALSE)
-New names:
-  • `` -> `...1`
-> colnames(df) <- c("Respuesta_Abierta")
-> 
-  > df <- df %>% 
-  +   filter(!is.na(Respuesta_Abierta) & Respuesta_Abierta != "") %>% 
-  +   mutate(doc_id = row_number())
-> 
-  > # 2. Limpieza de datos y tokenización
-  > df_limpio <- df %>%
-  +   mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),
-             +          Respuesta_Abierta = removePunctuation(Respuesta_Abierta),
-             +          Respuesta_Abierta = removeNumbers(Respuesta_Abierta),
-             +          Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>%
-  +   unnest_tokens(word, Respuesta_Abierta) %>%
-  +   filter(!word %in% stopwords("es")) %>%
-  +   mutate(word = lemmatize_strings(word, language = "es"),
-             +          word = stem_strings(word, language = "es"))
-> 
-  > # 3. Verificar que las respuestas están correctas después de la limpieza
-  > # Mantener la columna original `Respuesta_Abierta` para el análisis de sentimientos
-  > df_limpio$Respuesta_Abierta <- df$Respuesta_Abierta
-Error in `$<-`:
-  ! Assigned data `df$Respuesta_Abierta` must be compatible with existing data.
-✖ Existing data has 8906 rows.
-✖ Assigned data has 2564 rows.
-ℹ Only vectors of size 1 are recycled.
-Caused by error in `vectbl_recycle_rhs_rows()`:
-  ! Can't recycle input of size 2564 to size 8906.
-Run `rlang::last_trace()` to see where the error occurred.
-> rlang::last_trace()
-<error/tibble_error_assign_incompatible_size>
-Error in `$<-`:
-! Assigned data `df$Respuesta_Abierta` must be compatible with existing data.
-✖ Existing data has 8906 rows.
-✖ Assigned data has 2564 rows.
-ℹ Only vectors of size 1 are recycled.
-Caused by error in `vectbl_recycle_rhs_rows()`:
-! Can't recycle input of size 2564 to size 8906.
----
-  Backtrace:
-  ▆
-1. ├─base::`$<-`(`*tmp*`, Respuesta_Abierta, value = `<chr>`)
-2. └─tibble:::`$<-.tbl_df`(`*tmp*`, Respuesta_Abierta, value = `<chr>`)
-3.   └─tibble:::tbl_subassign(...)
-4.     └─tibble:::vectbl_recycle_rhs_rows(value, fast_nrow(xo), i_arg = NULL, value_arg, call)
