@@ -241,4 +241,62 @@ write_xlsx(df_negativos, path = "C:/Users/racl26345/Documents/Tablas para Automa
 
 ############################################################
 
-
+> # Cargar las librerías necesarias
+  > library(readxl)
+> library(tidyverse)
+> library(tm)
+> library(tidytext)
+> library(syuzhet)
+> library(caret)
+> library(udpipe)
+> library(writexl)
+> 
+  > # 1. Cargar el archivo Excel y renombrar la columna
+  > ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas abiertas.xlsx"
+> df <- read_excel(ruta_archivo, col_names = FALSE)
+New names:
+  • `` -> `...1`
+> colnames(df) <- c("Respuesta_Abierta")
+> 
+  > df <- df %>% 
+  +   filter(!is.na(Respuesta_Abierta) & Respuesta_Abierta != "") %>% 
+  +   mutate(doc_id = row_number())
+> 
+  > # 2. Limpieza de datos y tokenización
+  > df_limpio <- df %>%
+  +   mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),
+             +          Respuesta_Abierta = removePunctuation(Respuesta_Abierta),
+             +          Respuesta_Abierta = removeNumbers(Respuesta_Abierta),
+             +          Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>%
+  +   unnest_tokens(word, Respuesta_Abierta) %>%
+  +   filter(!word %in% stopwords("es")) %>%
+  +   mutate(word = lemmatize_strings(word, language = "es"),
+             +          word = stem_strings(word, language = "es"))
+> 
+  > # 3. Verificar que las respuestas están correctas después de la limpieza
+  > # Mantener la columna original `Respuesta_Abierta` para el análisis de sentimientos
+  > df_limpio$Respuesta_Abierta <- df$Respuesta_Abierta
+Error in `$<-`:
+  ! Assigned data `df$Respuesta_Abierta` must be compatible with existing data.
+✖ Existing data has 8906 rows.
+✖ Assigned data has 2564 rows.
+ℹ Only vectors of size 1 are recycled.
+Caused by error in `vectbl_recycle_rhs_rows()`:
+  ! Can't recycle input of size 2564 to size 8906.
+Run `rlang::last_trace()` to see where the error occurred.
+> rlang::last_trace()
+<error/tibble_error_assign_incompatible_size>
+Error in `$<-`:
+! Assigned data `df$Respuesta_Abierta` must be compatible with existing data.
+✖ Existing data has 8906 rows.
+✖ Assigned data has 2564 rows.
+ℹ Only vectors of size 1 are recycled.
+Caused by error in `vectbl_recycle_rhs_rows()`:
+! Can't recycle input of size 2564 to size 8906.
+---
+  Backtrace:
+  ▆
+1. ├─base::`$<-`(`*tmp*`, Respuesta_Abierta, value = `<chr>`)
+2. └─tibble:::`$<-.tbl_df`(`*tmp*`, Respuesta_Abierta, value = `<chr>`)
+3.   └─tibble:::tbl_subassign(...)
+4.     └─tibble:::vectbl_recycle_rhs_rows(value, fast_nrow(xo), i_arg = NULL, value_arg, call)
