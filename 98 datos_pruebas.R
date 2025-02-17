@@ -144,9 +144,7 @@ library(tidyverse)
 library(tm)
 library(tidytext)
 library(syuzhet)
-library(textstem)  # Para stemming y lematización
-library(widyr)
-library(writexl)
+library(caret)
 library(udpipe)
 
 # 1. Cargar el archivo Excel y renombrar la columna
@@ -166,46 +164,65 @@ df_limpio <- df %>%
          Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>%
   unnest_tokens(word, Respuesta_Abierta) %>%
   filter(!word %in% stopwords("es")) %>%
-  mutate(word = lemmatize_strings(word, language = "es"),  # Lematización
-         word = stem_strings(word, language = "es"))       # Stemming
+  mutate(word = lemmatize_strings(word, language = "es"),
+         word = stem_strings(word, language = "es"))
 
-# 3. Cargar y combinar múltiples diccionarios de sentimientos
-lexicon_nrc <- get_sentiment_dictionary("nrc", language = "spanish")
-lexicon_afinn <- get_sentiment_dictionary("afinn", language = "spanish")
-lexicon_bing <- get_sentiment_dictionary("bing", language = "spanish")
+# 3. Análisis de sentimientos utilizando `syuzhet` (diccionario NRC)
+sentimientos <- get_sentiment(df_limpio$Respuesta_Abierta, method = "nrc", language = "spanish")
 
-# Unir todos los diccionarios en uno solo
-lexicon_combinado <- bind_rows(
-  lexicon_nrc %>% mutate(source = "nrc"),
-  lexicon_afinn %>% mutate(source = "afinn"),
-  lexicon_bing %>% mutate(source = "bing")
-)
+df$sentimiento <- sentimientos$sentiment
 
-# 4. Análisis de polaridad con el diccionario combinado
-df_polaridad <- df_limpio %>%
-  inner_join(lexicon_combinado, by = "word", relationship = "many-to-many") %>%
-  group_by(doc_id) %>%
-  summarise(polaridad = sum(value, na.rm = TRUE))
+# 4. Clasificación de Sentimientos (Machine Learning) con `caret`
+# Primero etiquetamos los sentimientos en positivo/negativo para el modelo
+df$sentimiento_categoria <- ifelse(df$sentimiento == "positive", "Positivo", 
+                                   ifelse(df$sentimiento == "negative", "Negativo", "Neutral"))
 
-df <- df %>%
-  left_join(df_polaridad, by = "doc_id")
+# 5. Preprocesamiento para Machine Learning
+# Convertimos las respuestas en un formato adecuado para ML
+df_ml <- df %>%
+  mutate(Respuesta_Abierta = tolower(Respuesta_Abierta)) %>%
+  select(doc_id, Respuesta_Abierta, sentimiento_categoria)
 
-# 5. Identificar respuestas negativas
+# Crear un "corpus" para el análisis de texto
+corpus <- Corpus(VectorSource(df_ml$Respuesta_Abierta))
+
+# Preprocesamiento de texto
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("es"))
+corpus <- tm_map(corpus, stripWhitespace)
+
+# Crear una matriz de términos (DTM)
+dtm <- DocumentTermMatrix(corpus)
+
+# Convertir la DTM en un data.frame
+dtm_df <- as.data.frame(as.matrix(dtm))
+colnames(dtm_df) <- make.names(colnames(dtm_df))
+
+# Agregar la variable de etiqueta (sentimiento) al data.frame
+dtm_df$sentimiento_categoria <- df_ml$sentimiento_categoria
+
+# 6. Entrenamiento de modelo con `caret` (Random Forest)
+set.seed(123)
+
+# Entrenar el modelo usando Random Forest
+modelo_rf <- train(sentimiento_categoria ~ ., data = dtm_df, method = "rf", trControl = trainControl(method = "cv"))
+
+# Predicción con el modelo entrenado
+predicciones <- predict(modelo_rf, dtm_df)
+
+# Agregar predicciones al dataframe original
+df$sentimiento_predicho <- predicciones
+
+# 7. Ver los resultados
+head(df)
+
+# Guardar las respuestas negativas en la nueva ubicación especificada
 df_negativos <- df %>%
-  filter(polaridad < 0) %>%
-  select(doc_id, Respuesta_Abierta, polaridad)
+  filter(sentimiento_predicho == "Negativo") %>%
+  select(doc_id, Respuesta_Abierta, sentimiento_predicho)
 
-write_xlsx(df_negativos, path = "Respuestas_Negativas.xlsx")
+# Especificar la nueva ruta para guardar el archivo
+write_xlsx(df_negativos, path = "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas_Negativas_ML.xlsx")
 
-# 6. Crear la columna `cluster` basada en la polaridad
-df <- df %>%
-  mutate(cluster = ifelse(polaridad < 0, "Negativo", "Positivo"))
-
-# 7. Análisis de palabras más frecuentes en cada cluster
-palabras_por_cluster <- df_limpio %>%
-  left_join(df %>% select(doc_id, cluster), by = "doc_id") %>%
-  group_by(cluster, word) %>%
-  summarise(n = n(), .groups = 'drop') %>%
-  top_n(10, n)
-
-print(palabras_por_cluster)
