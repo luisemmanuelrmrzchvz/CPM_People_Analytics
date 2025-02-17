@@ -190,41 +190,79 @@ df_limpio <- df_limpio %>%
 # 6. Análisis de sentimientos utilizando `syuzhet` (diccionario NRC) para las respuestas mayores a 3 palabras
 sentimientos <- get_nrc_sentiment(df_limpio$Respuesta_Abierta)
 
-# 7. Clasificación de sentimientos (Positivo, Negativo, Neutro) para las respuestas mayores a 3 palabras
+# 7. Clasificación de sentimientos (Positivo, Negativo, Neutro, con categorías más detalladas)
 if (ncol(sentimientos) > 0) {
-  df_limpio$sentimiento <- ifelse(sentimientos$negative > sentimientos$positive, "Negativo", 
-                                  ifelse(sentimientos$positive > sentimientos$negative, "Positivo", "Neutro"))
+  df_limpio$sentimiento <- case_when(
+    sentimientos$positive > 0.75 ~ "Muy Positivo",
+    sentimientos$positive > 0 ~ "Positivo",
+    sentimientos$negative > 0.75 ~ "Muy Negativo",
+    sentimientos$negative > 0 ~ "Negativo",
+    TRUE ~ "Neutro"
+  )
 } else {
   warning("El análisis de sentimientos no produjo resultados válidos.")
 }
 
-# 8. Unir los datos de respuestas con clasificación directa ("Neutro_Directo") y modelo
+# 8. Gráfico rápido de proporciones de registros con menos de 4 palabras (Neutro Directo) vs. más de 4 palabras (Modelo de Sentimiento)
+grafico_proporciones <- df %>%
+  ggplot(aes(x = ifelse(num_palabras < 4, "Neutro Directo", "Entra a Modelo Sentimientos"))) +
+  geom_bar(aes(fill = ifelse(num_palabras < 4, "Neutro Directo", "Entra a Modelo Sentimientos"))) +
+  scale_fill_manual(values = c("Neutro Directo" = "gray", "Entra a Modelo Sentimientos" = "blue")) +
+  labs(title = "Proporción de Registros: Neutro Directo vs. Entran al Modelo de Sentimiento", x = "Categoría", y = "Cantidad de Respuestas")
+
+# Mostrar gráfico
+print(grafico_proporciones)
+
+# 9. Gráfico de frecuencias de palabras y bigramas para los registros que entran al modelo
+# Frecuencia de palabras
+frecuencia_palabras <- df_limpio %>%
+  count(word, sort = TRUE) %>%
+  filter(n > 2)  # Filtrar palabras con frecuencia baja
+
+grafico_frecuencia_palabras <- ggplot(frecuencia_palabras, aes(x = reorder(word, n), y = n)) +
+  geom_bar(stat = "identity", fill = "lightblue") +
+  coord_flip() +
+  labs(title = "Frecuencia de Palabras (Más de 2 Ocurrencias)", x = "Palabra", y = "Frecuencia")
+
+# Bigramas (pares de palabras)
+bigramas <- df_limpio %>%
+  unnest_tokens(bigram, word, token = "ngrams", n = 2) %>%
+  count(bigram, sort = TRUE) %>%
+  filter(n > 1)
+
+grafico_bigrama <- ggplot(bigramas, aes(x = reorder(bigram, n), y = n)) +
+  geom_bar(stat = "identity", fill = "lightgreen") +
+  coord_flip() +
+  labs(title = "Frecuencia de Bigramas (Más de 1 Ocurrencia)", x = "Bigramas", y = "Frecuencia")
+
+# Mostrar gráficos
+print(grafico_frecuencia_palabras)
+print(grafico_bigrama)
+
+# 10. Unir los datos de respuestas con clasificación directa ("Neutro_Directo") y modelo
 df_resultados <- df %>%
   filter(is.na(sentimiento)) %>%
   mutate(sentimiento = "Neutro_Directo") %>%
   bind_rows(df_limpio %>% select(doc_id, Respuesta_Abierta, sentimiento))
 
-# 9. Eliminar registros duplicados (si existieran)
+# 11. Eliminar registros duplicados (si existieran)
 df_resultados <- df_resultados %>% distinct()
 
-# 10. Verificar y reemplazar valores NA en la columna sentimiento
-df_resultados$sentimiento[is.na(df_resultados$sentimiento)] <- "Neutro"
+# 12. Guardar los resultados en un archivo Excel con registros que entran al modelo y clasificación completa de sentimientos
+df_resultados_modelo <- df_resultados %>% filter(sentimiento != "Neutro_Directo")
+write_xlsx(df_resultados_modelo, path = "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas_Clasificadas_Modelo.xlsx")
 
-# 11. Guardar los resultados en un archivo Excel con registros únicos
-write_xlsx(df_resultados, path = "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas_Clasificadas.xlsx")
-
-# 12. Crear gráficos visuales
-# Gráfico de distribución de sentimientos
-grafico_sentimientos <- df_resultados %>%
+# 13. Crear gráfico de clasificación amplia de sentimientos
+grafico_sentimientos_amplio <- df_resultados_modelo %>%
   ggplot(aes(x = sentimiento)) +
-  geom_bar(aes(fill = sentimiento)) +  # Asociamos 'fill' con 'sentimiento'
-  scale_fill_manual(values = c("Positivo" = "blue", "Negativo" = "red", "Neutro" = "gray")) +  # Colores para cada sentimiento
+  geom_bar(aes(fill = sentimiento)) +
+  scale_fill_manual(values = c("Muy Positivo" = "green", "Positivo" = "blue", "Neutro" = "gray", "Negativo" = "red", "Muy Negativo" = "darkred")) +
   theme_minimal() +
-  labs(title = "Distribución de Sentimientos en Respuestas Abiertas",
-       x = "Sentimiento", y = "Cantidad de Respuestas")
+  labs(title = "Distribución Ampliada de Sentimientos en Respuestas", x = "Sentimiento", y = "Cantidad de Respuestas")
 
-# Mostrar el gráfico
-print(grafico_sentimientos)
+# Mostrar gráfico
+print(grafico_sentimientos_amplio)
+
 
 
 
