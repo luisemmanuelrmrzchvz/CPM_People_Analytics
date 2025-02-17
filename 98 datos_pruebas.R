@@ -199,69 +199,101 @@ if (ncol(sentimientos) > 0) {
     sentimientos$negative > 0 ~ "Negativo",
     TRUE ~ "Neutro"
   )
+  
+  # Añadir columna de valor de sentimiento (puntaje)
+  df_limpio$sentimiento_valor <- sentiments$positive - sentiments$negative  # Puntaje de sentimiento
 } else {
   warning("El análisis de sentimientos no produjo resultados válidos.")
 }
 
-# 8. Gráfico rápido de proporciones de registros con menos de 4 palabras (Neutro Directo) vs. más de 4 palabras (Modelo de Sentimiento)
-grafico_proporciones <- df %>%
-  ggplot(aes(x = ifelse(num_palabras < 4, "Neutro Directo", "Entra a Modelo Sentimientos"))) +
-  geom_bar(aes(fill = ifelse(num_palabras < 4, "Neutro Directo", "Entra a Modelo Sentimientos"))) +
-  scale_fill_manual(values = c("Neutro Directo" = "gray", "Entra a Modelo Sentimientos" = "blue")) +
-  labs(title = "Proporción de Registros: Neutro Directo vs. Entran al Modelo de Sentimiento", x = "Categoría", y = "Cantidad de Respuestas")
+# 8. Gráfico de pastel para proporción de registros con menos de 4 palabras (Neutro Directo) vs. más de 4 palabras (Modelo de Sentimiento)
+grafico_pastel <- df %>%
+  ggplot(aes(x = "", fill = ifelse(num_palabras < 4, "Neutro Directo", "Entra al Modelo de Sentimiento"))) +
+  geom_bar(width = 1) +
+  coord_polar(theta = "y") +
+  scale_fill_manual(values = c("Neutro Directo" = "#D3D3D3", "Entra al Modelo de Sentimiento" = "#1E90FF")) +
+  labs(title = "Proporción de Respuestas: Neutro Directo vs. Entran al Modelo de Sentimiento", x = "", y = "") +
+  theme_void() +
+  theme(legend.position = "bottom", legend.title = element_blank())
 
-# Mostrar gráfico
-print(grafico_proporciones)
+# Mostrar gráfico de pastel
+print(grafico_pastel)
 
-# 9. Gráfico de frecuencias de palabras y bigramas para los registros que entran al modelo
-# Frecuencia de palabras
+# 9. Gráfico de frecuencias de las 15 palabras más comunes + "Otros"
 frecuencia_palabras <- df_limpio %>%
   count(word, sort = TRUE) %>%
-  filter(n > 2)  # Filtrar palabras con frecuencia baja
+  filter(n > 2) %>%
+  top_n(15) %>%
+  bind_rows(
+    df_limpio %>%
+      count(word) %>%
+      filter(!word %in% top_n(15)$word) %>%
+      summarise(word = "Otros", n = sum(n))
+  )
 
 grafico_frecuencia_palabras <- ggplot(frecuencia_palabras, aes(x = reorder(word, n), y = n)) +
-  geom_bar(stat = "identity", fill = "lightblue") +
+  geom_bar(stat = "identity", fill = "#1E90FF") +
   coord_flip() +
-  labs(title = "Frecuencia de Palabras (Más de 2 Ocurrencias)", x = "Palabra", y = "Frecuencia")
+  labs(title = "Frecuencia de Palabras (Top 15 + Otros)", x = "Palabra", y = "Frecuencia") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 12, color = "black"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(size = 14),
+        plot.title = element_text(hjust = 0.5, size = 16))
 
-# Bigramas (pares de palabras)
+# Mostrar gráfico de frecuencia de palabras
+print(grafico_frecuencia_palabras)
+
+# 10. Bigramas (evitar N/A) y gráfico de frecuencia
 bigramas <- df_limpio %>%
   unnest_tokens(bigram, word, token = "ngrams", n = 2) %>%
+  filter(!is.na(bigram)) %>%
   count(bigram, sort = TRUE) %>%
   filter(n > 1)
 
 grafico_bigrama <- ggplot(bigramas, aes(x = reorder(bigram, n), y = n)) +
-  geom_bar(stat = "identity", fill = "lightgreen") +
+  geom_bar(stat = "identity", fill = "#FF6347") +
   coord_flip() +
-  labs(title = "Frecuencia de Bigramas (Más de 1 Ocurrencia)", x = "Bigramas", y = "Frecuencia")
+  labs(title = "Frecuencia de Bigramas", x = "Bigramas", y = "Frecuencia") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 12, color = "black"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(size = 14),
+        plot.title = element_text(hjust = 0.5, size = 16))
 
-# Mostrar gráficos
-print(grafico_frecuencia_palabras)
+# Mostrar gráfico de bigramas
 print(grafico_bigrama)
 
-# 10. Unir los datos de respuestas con clasificación directa ("Neutro_Directo") y modelo
+# 11. Unir los datos de respuestas con clasificación directa ("Neutro_Directo") y modelo
 df_resultados <- df %>%
   filter(is.na(sentimiento)) %>%
   mutate(sentimiento = "Neutro_Directo") %>%
-  bind_rows(df_limpio %>% select(doc_id, Respuesta_Abierta, sentimiento))
+  bind_rows(df_limpio %>% select(doc_id, Respuesta_Abierta, sentimiento, sentimiento_valor))
 
-# 11. Eliminar registros duplicados (si existieran)
+# 12. Eliminar registros duplicados (si existieran)
 df_resultados <- df_resultados %>% distinct()
 
-# 12. Guardar los resultados en un archivo Excel con registros que entran al modelo y clasificación completa de sentimientos
+# 13. Guardar los resultados en un archivo Excel con registros que entran al modelo y clasificación completa de sentimientos
 df_resultados_modelo <- df_resultados %>% filter(sentimiento != "Neutro_Directo")
 write_xlsx(df_resultados_modelo, path = "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas_Clasificadas_Modelo.xlsx")
 
-# 13. Crear gráfico de clasificación amplia de sentimientos
+# 14. Crear gráfico de clasificación amplia de sentimientos
 grafico_sentimientos_amplio <- df_resultados_modelo %>%
   ggplot(aes(x = sentimiento)) +
   geom_bar(aes(fill = sentimiento)) +
-  scale_fill_manual(values = c("Muy Positivo" = "green", "Positivo" = "blue", "Neutro" = "gray", "Negativo" = "red", "Muy Negativo" = "darkred")) +
+  scale_fill_manual(values = c("Muy Positivo" = "#28A745", "Positivo" = "#1E90FF", "Neutro" = "#D3D3D3", 
+                               "Negativo" = "#FF6347", "Muy Negativo" = "#DC143C")) +
   theme_minimal() +
-  labs(title = "Distribución Ampliada de Sentimientos en Respuestas", x = "Sentimiento", y = "Cantidad de Respuestas")
+  labs(title = "Distribución Ampliada de Sentimientos en Respuestas", x = "Sentimiento", y = "Cantidad de Respuestas") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+        axis.text.y = element_text(size = 12, color = "black"),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(size = 14),
+        plot.title = element_text(hjust = 0.5, size = 16))
 
-# Mostrar gráfico
+# Mostrar gráfico de clasificación de sentimientos
 print(grafico_sentimientos_amplio)
+
 
 
 
