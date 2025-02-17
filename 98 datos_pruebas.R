@@ -154,10 +154,6 @@ library(ggplot2)
 # 1. Cargar el archivo Excel, omitiendo la primera fila (título)
 ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas abiertas.xlsx"
 df <- read_excel(ruta_archivo, col_names = FALSE)
-
-# Eliminar la primera fila (título)
-df <- df[-1, ]
-
 # Renombrar la columna
 colnames(df) <- c("Respuesta_Abierta")
 
@@ -190,6 +186,9 @@ df_limpio <- df_limpio %>%
 # 6. Análisis de sentimientos utilizando `syuzhet` (diccionario NRC) para las respuestas mayores a 3 palabras
 sentimientos <- get_nrc_sentiment(df_limpio$Respuesta_Abierta)
 
+# Verificar las primeras filas de los resultados de sentimiento para asegurar que los datos son válidos
+head(sentimientos)
+
 # 7. Clasificación de sentimientos (Positivo, Negativo, Neutro, con categorías más detalladas)
 if (ncol(sentimientos) > 0) {
   df_limpio$sentimiento <- case_when(
@@ -201,98 +200,75 @@ if (ncol(sentimientos) > 0) {
   )
   
   # Añadir columna de valor de sentimiento (puntaje)
-  df_limpio$sentimiento_valor <- sentiments$positive - sentiments$negative  # Puntaje de sentimiento
+  # Asegurarse de que 'sentimientos' tiene las columnas adecuadas para el cálculo
+  if ("positive" %in% colnames(sentimientos) && "negative" %in% colnames(sentimientos)) {
+    df_limpio$sentimiento_valor <- sentimientos$positive - sentimientos$negative  # Puntaje de sentimiento
+  } else {
+    warning("Las columnas 'positive' y 'negative' no están presentes en el análisis de sentimientos.")
+  }
 } else {
   warning("El análisis de sentimientos no produjo resultados válidos.")
 }
 
-# 8. Gráfico de pastel para proporción de registros con menos de 4 palabras (Neutro Directo) vs. más de 4 palabras (Modelo de Sentimiento)
-grafico_pastel <- df %>%
-  ggplot(aes(x = "", fill = ifelse(num_palabras < 4, "Neutro Directo", "Entra al Modelo de Sentimiento"))) +
+# 8. Filtrar respuestas "Neutro_Directo" y respuestas que entran al modelo
+df_neutro_directo <- df %>% filter(sentimiento == "Neutro_Directo")
+df_entrar_modelo <- df %>% filter(sentimiento != "Neutro_Directo")
+
+# 9. Visualización de la proporción de "Neutro_Directo" vs "Entran a Modelo"
+# Gráfico de pastel para mostrar proporción de "Neutro_Directo" y registros "Entran a Modelo"
+ggplot(df, aes(x = "", fill = sentimiento)) +
   geom_bar(width = 1) +
   coord_polar(theta = "y") +
-  scale_fill_manual(values = c("Neutro Directo" = "#D3D3D3", "Entra al Modelo de Sentimiento" = "#1E90FF")) +
-  labs(title = "Proporción de Respuestas: Neutro Directo vs. Entran al Modelo de Sentimiento", x = "", y = "") +
   theme_void() +
-  theme(legend.position = "bottom", legend.title = element_blank())
+  labs(title = "Proporción de Neutro Directo vs Entran a Modelo")
 
-# Mostrar gráfico de pastel
-print(grafico_pastel)
-
-# 9. Gráfico de frecuencias de las 15 palabras más comunes + "Otros"
-frecuencia_palabras <- df_limpio %>%
+# 10. Frecuencias de palabras para respuestas "Neutro_Directo"
+# Top 15 palabras más comunes
+top_palabras <- df_limpio %>%
   count(word, sort = TRUE) %>%
-  filter(n > 2) %>%
-  top_n(15) %>%
-  bind_rows(
-    df_limpio %>%
-      count(word) %>%
-      filter(!word %in% top_n(15)$word) %>%
-      summarise(word = "Otros", n = sum(n))
-  )
+  top_n(15)
 
-grafico_frecuencia_palabras <- ggplot(frecuencia_palabras, aes(x = reorder(word, n), y = n)) +
-  geom_bar(stat = "identity", fill = "#1E90FF") +
+# Frecuencia de palabras fuera del top 15
+otros_palabras <- df_limpio %>%
+  count(word) %>%
+  filter(!word %in% top_palabras$word) %>%
+  summarise(otros = sum(n))
+
+# Combina el top 15 y el volumen de palabras fuera del top 15
+top_palabras <- bind_rows(top_palabras, tibble(word = "Otros", n = otros_palabras$otros))
+
+# Gráfico de frecuencias de palabras (Top 15 más frecuentes)
+ggplot(top_palabras, aes(x = reorder(word, n), y = n)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
   coord_flip() +
-  labs(title = "Frecuencia de Palabras (Top 15 + Otros)", x = "Palabra", y = "Frecuencia") +
-  theme_minimal() +
-  theme(axis.text.y = element_text(size = 12, color = "black"),
-        axis.title.x = element_text(size = 14),
-        axis.title.y = element_text(size = 14),
-        plot.title = element_text(hjust = 0.5, size = 16))
+  labs(title = "Frecuencia de Palabras (Top 15)") +
+  theme_minimal()
 
-# Mostrar gráfico de frecuencia de palabras
-print(grafico_frecuencia_palabras)
-
-# 10. Bigramas (evitar N/A) y gráfico de frecuencia
-bigramas <- df_limpio %>%
+# 11. Análisis de Bigramas
+# Análisis de bigramas, evitando el valor "N/A"
+bigrama <- df_limpio %>%
   unnest_tokens(bigram, word, token = "ngrams", n = 2) %>%
-  filter(!is.na(bigram)) %>%
-  count(bigram, sort = TRUE) %>%
-  filter(n > 1)
+  count(bigram, sort = TRUE)
 
-grafico_bigrama <- ggplot(bigramas, aes(x = reorder(bigram, n), y = n)) +
-  geom_bar(stat = "identity", fill = "#FF6347") +
+# Excluir bigramas "N/A"
+bigrama <- bigrama %>%
+  filter(bigram != "NA NA")
+
+# Gráfico de bigramas
+ggplot(bigrama, aes(x = reorder(bigram, n), y = n)) +
+  geom_bar(stat = "identity", fill = "lightgreen") +
   coord_flip() +
-  labs(title = "Frecuencia de Bigramas", x = "Bigramas", y = "Frecuencia") +
-  theme_minimal() +
-  theme(axis.text.y = element_text(size = 12, color = "black"),
-        axis.title.x = element_text(size = 14),
-        axis.title.y = element_text(size = 14),
-        plot.title = element_text(hjust = 0.5, size = 16))
+  labs(title = "Frecuencia de Bigramas") +
+  theme_minimal()
 
-# Mostrar gráfico de bigramas
-print(grafico_bigrama)
+# 12. Gráfico de distribución de sentimientos (Negativo, Neutro, Positivo, Muy Positivo, Muy Negativo)
+ggplot(df_limpio, aes(x = sentimiento)) +
+  geom_bar(fill = c("red", "grey", "green", "blue", "darkred")) +
+  labs(title = "Distribución de Sentimientos") +
+  theme_minimal()
 
-# 11. Unir los datos de respuestas con clasificación directa ("Neutro_Directo") y modelo
-df_resultados <- df %>%
-  filter(is.na(sentimiento)) %>%
-  mutate(sentimiento = "Neutro_Directo") %>%
-  bind_rows(df_limpio %>% select(doc_id, Respuesta_Abierta, sentimiento, sentimiento_valor))
-
-# 12. Eliminar registros duplicados (si existieran)
-df_resultados <- df_resultados %>% distinct()
-
-# 13. Guardar los resultados en un archivo Excel con registros que entran al modelo y clasificación completa de sentimientos
-df_resultados_modelo <- df_resultados %>% filter(sentimiento != "Neutro_Directo")
-write_xlsx(df_resultados_modelo, path = "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas_Clasificadas_Modelo.xlsx")
-
-# 14. Crear gráfico de clasificación amplia de sentimientos
-grafico_sentimientos_amplio <- df_resultados_modelo %>%
-  ggplot(aes(x = sentimiento)) +
-  geom_bar(aes(fill = sentimiento)) +
-  scale_fill_manual(values = c("Muy Positivo" = "#28A745", "Positivo" = "#1E90FF", "Neutro" = "#D3D3D3", 
-                               "Negativo" = "#FF6347", "Muy Negativo" = "#DC143C")) +
-  theme_minimal() +
-  labs(title = "Distribución Ampliada de Sentimientos en Respuestas", x = "Sentimiento", y = "Cantidad de Respuestas") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
-        axis.text.y = element_text(size = 12, color = "black"),
-        axis.title.x = element_text(size = 14),
-        axis.title.y = element_text(size = 14),
-        plot.title = element_text(hjust = 0.5, size = 16))
-
-# Mostrar gráfico de clasificación de sentimientos
-print(grafico_sentimientos_amplio)
+# 13. Guardar los resultados en un archivo de Excel
+write_xlsx(df_limpio, "Respuestas_Clasificadas.xlsx")
 
 
 
@@ -303,97 +279,4 @@ print(grafico_sentimientos_amplio)
 
 
 
-> # Cargar las librerías necesarias
-  > library(readxl)
-> library(tidyverse)
-> library(tm)
-> library(tidytext)
-> library(syuzhet)
-> library(caret)
-> library(udpipe)
-> library(writexl)
-> library(ggplot2)
-> 
-  > # 1. Cargar el archivo Excel, omitiendo la primera fila (título)
-  > ruta_archivo <- "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Respuestas abiertas.xlsx"
-> df <- read_excel(ruta_archivo, col_names = FALSE)
-New names:
-  • `` -> `...1`
-> 
-  > # Eliminar la primera fila (título)
-  > df <- df[-1, ]
-> 
-  > # Renombrar la columna
-  > colnames(df) <- c("Respuesta_Abierta")
-> 
-  > # 2. Filtrar respuestas con menos de 4 palabras y categorizar como "Neutro_Directo"
-  > df <- df %>%
-  +   filter(!is.na(Respuesta_Abierta) & Respuesta_Abierta != "") %>%
-  +   mutate(doc_id = row_number(),
-             +          num_palabras = str_count(Respuesta_Abierta, "\\w+"),
-             +          sentimiento = if_else(num_palabras < 4, "Neutro_Directo", NA_character_))
-> 
-  > # 3. Filtrar solo las respuestas con más de 3 palabras (para análisis de sentimientos)
-  > df_modelo <- df %>%
-  +   filter(num_palabras >= 4)
-> 
-  > # 4. Limpieza de datos y tokenización (solo para respuestas de más de 4 palabras)
-  > df_limpio <- df_modelo %>%
-  +   mutate(Respuesta_Abierta = tolower(Respuesta_Abierta),
-             +          Respuesta_Abierta = removePunctuation(Respuesta_Abierta),
-             +          Respuesta_Abierta = removeNumbers(Respuesta_Abierta),
-             +          Respuesta_Abierta = stripWhitespace(Respuesta_Abierta)) %>%
-  +   unnest_tokens(word, Respuesta_Abierta) %>%
-  +   filter(!word %in% stopwords("es")) %>%
-  +   mutate(word = lemmatize_strings(word, language = "es"),
-             +          word = stem_strings(word, language = "es"))
-> 
-  > # 5. Agregar la columna original `Respuesta_Abierta` a `df_limpio` para análisis de sentimientos
-  > df_limpio <- df_limpio %>%
-  +   left_join(df %>% select(doc_id, Respuesta_Abierta), by = "doc_id")
-> 
-  > # 6. Análisis de sentimientos utilizando `syuzhet` (diccionario NRC) para las respuestas mayores a 3 palabras
-  > sentimientos <- get_nrc_sentiment(df_limpio$Respuesta_Abierta)
-> 
-  > # 7. Clasificación de sentimientos (Positivo, Negativo, Neutro, con categorías más detalladas)
-  > if (ncol(sentimientos) > 0) {
-    +   df_limpio$sentimiento <- case_when(
-      +     sentimientos$positive > 0.75 ~ "Muy Positivo",
-      +     sentimientos$positive > 0 ~ "Positivo",
-      +     sentimientos$negative > 0.75 ~ "Muy Negativo",
-      +     sentimientos$negative > 0 ~ "Negativo",
-      +     TRUE ~ "Neutro"
-      +   )
-    +   
-      +   # Añadir columna de valor de sentimiento (puntaje)
-      +   df_limpio$sentimiento_valor <- sentiments$positive - sentiments$negative  # Puntaje de sentimiento
-      + } else {
-        +   warning("El análisis de sentimientos no produjo resultados válidos.")
-        + }
-Error in `$<-`:
-  ! Assigned data `sentiments$positive - sentiments$negative` must be compatible with existing data.
-✖ Existing data has 7320 rows.
-✖ Assigned data has 0 rows.
-ℹ Only vectors of size 1 are recycled.
-Caused by error in `vectbl_recycle_rhs_rows()`:
-  ! Can't recycle input of size 0 to size 7320.
-Run `rlang::last_trace()` to see where the error occurred.
-Avisos:
-1: Unknown or uninitialised column: `positive`. 
-2: Unknown or uninitialised column: `negative`. 
-> rlang::last_trace()
-<error/tibble_error_assign_incompatible_size>
-Error in `$<-`:
-! Assigned data `sentiments$positive - sentiments$negative` must be compatible with existing data.
-✖ Existing data has 7320 rows.
-✖ Assigned data has 0 rows.
-ℹ Only vectors of size 1 are recycled.
-Caused by error in `vectbl_recycle_rhs_rows()`:
-! Can't recycle input of size 0 to size 7320.
----
-  Backtrace:
-  ▆
-1. ├─base::`$<-`(`*tmp*`, sentimiento_valor, value = `<int>`)
-2. └─tibble:::`$<-.tbl_df`(`*tmp*`, sentimiento_valor, value = `<int>`)
-3.   └─tibble:::tbl_subassign(...)
-4.     └─tibble:::vectbl_recycle_rhs_rows(value, fast_nrow(xo), i_arg = NULL, value_arg, call)
+
