@@ -39,7 +39,6 @@ print("Datos insertados en la base de datos correctamente.")
 ####################################################################################
 
 
-
 # Cargar las librerías necesarias
 library(readxl)
 library(tidyverse)
@@ -183,40 +182,40 @@ ggplot(proporcion, aes(x = "", y = Porcentaje_Neutro_Directo, fill = "Neutro_Dir
   scale_fill_manual(values = colores_corporativos) +
   geom_label_repel(
     aes(label = paste0(round(Porcentaje_Neutro_Directo, 1), "%\n(", Neutro_Directo, " registros)"),
-        position = position_stack(vjust = 0.5), size = 5, color = "white", fill = colores_corporativos["Neutro_Directo"],
-        label.padding = unit(0.4, "lines"), show.legend = FALSE, box.padding = 0.5, max.overlaps = Inf, nudge_x = 0.5
-    ) +
-      geom_label_repel(
-        aes(label = paste0(round(Porcentaje_Entran_a_Modelo, 1), "%\n(", Entran_a_Modelo, " registros)"),
-            position = position_stack(vjust = 0.5), size = 5, color = "black", fill = colores_corporativos["Entran_a_Modelo"],
-            label.padding = unit(0.4, "lines"), show.legend = FALSE, box.padding = 0.5, max.overlaps = Inf, nudge_x = -0.5
-        ) +
-          theme(legend.position = "bottom",
-                plot.title = element_text(hjust = 0.5, size = 16, face = "bold"))
-        
-        # 14. Gráfico de distribución de emociones complejas con estilo corporativo
-        df_limpio$Emoción_Compleja <- factor(df_limpio$Emoción_Compleja,
-                                             levels = c("Frustración", "Ansiedad", "Desesperación", "Sorpresa_Negativa", "Resentimiento",
-                                                        "Desilusión", "Indignación", "Miedo_al_Fracaso", "Culpa", "Sorpresa_Positiva",
-                                                        "Confianza_Optimismo", "Nostalgia", "Euforia", "Gratitud", "Orgullo", "Neutro"))
-        
-        ggplot(df_limpio, aes(x = Emoción_Compleja, fill = Emoción_Compleja)) +
-          geom_bar(color = "white", linewidth = 0.5) +
-          geom_text(aes(label = after_stat(count)), stat = "count", vjust = -0.5, size = 4, color = "black") +  # Usar after_stat(count)
-          scale_fill_manual(values = colores_corporativos) +
-          labs(title = "Distribución de Emociones Complejas",
-               x = "Emoción Compleja",
-               y = "Frecuencia") +
-          theme_minimal() +
-          theme(
-            plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
-            axis.text.x = element_text(angle = 45, hjust = 1, size = 12),  # Rotar etiquetas del eje x
-            axis.text.y = element_text(size = 12),
-            axis.title = element_text(size = 14)
-          )
-        
-        # 15. Guardar los resultados en un archivo Excel
-        write_xlsx(df_limpio, "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Resultados_Clasificacion_Sentimientos.xlsx")
+    position = position_stack(vjust = 0.5), size = 5, color = "white", fill = colores_corporativos["Neutro_Directo"],
+    label.padding = unit(0.4, "lines"), show.legend = FALSE, box.padding = 0.5, max.overlaps = Inf, nudge_x = 0.5
+  ) +
+  geom_label_repel(
+    aes(label = paste0(round(Porcentaje_Entran_a_Modelo, 1), "%\n(", Entran_a_Modelo, " registros)"),
+    position = position_stack(vjust = 0.5), size = 5, color = "black", fill = colores_corporativos["Entran_a_Modelo"],
+    label.padding = unit(0.4, "lines"), show.legend = FALSE, box.padding = 0.5, max.overlaps = Inf, nudge_x = -0.5
+  ) +
+  theme(legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5, size = 16, face = "bold"))
+
+# 14. Gráfico de distribución de emociones complejas con estilo corporativo
+df_limpio$Emoción_Compleja <- factor(df_limpio$Emoción_Compleja,
+                                     levels = c("Frustración", "Ansiedad", "Desesperación", "Sorpresa_Negativa", "Resentimiento",
+                                                "Desilusión", "Indignación", "Miedo_al_Fracaso", "Culpa", "Sorpresa_Positiva",
+                                                "Confianza_Optimismo", "Nostalgia", "Euforia", "Gratitud", "Orgullo", "Neutro"))
+
+ggplot(df_limpio, aes(x = Emoción_Compleja, fill = Emoción_Compleja)) +
+  geom_bar(color = "white", linewidth = 0.5) +
+  geom_text(aes(label = after_stat(count)), stat = "count", vjust = -0.5, size = 4, color = "black") +  # Usar after_stat(count)
+  scale_fill_manual(values = colores_corporativos) +
+  labs(title = "Distribución de Emociones Complejas",
+       x = "Emoción Compleja",
+       y = "Frecuencia") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 12),  # Rotar etiquetas del eje x
+    axis.text.y = element_text(size = 12),
+    axis.title = element_text(size = 14)
+  )
+
+# 15. Guardar los resultados en un archivo Excel
+write_xlsx(df_limpio, "C:/Users/racl26345/Documents/Tablas para Automatizaciones/Resultados_Clasificacion_Sentimientos.xlsx")
 
 
 
