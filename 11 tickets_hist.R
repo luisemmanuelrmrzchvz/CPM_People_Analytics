@@ -16,11 +16,11 @@ print(head(datos))  # Mostrar las primeras filas de los datos
 print(ncol(datos))  # Mostrar el número de columnas
 
 # Asignar nuevos nombres a las columnas seleccionadas
-nombres_columnas <- c("id_ticket", "fecha_creado", "estado_ticket", "agente_servicio", "fecha_interaccion", "hora_interaccion", "id_catalog")
+nombres_columnas <- c("id_ticket", "fecha_creado", "agente_servicio", "time_start_status", "time_end_status", "code_estado_ticket", "estado_ticket", "siguiente_accion_para", "seg_duracion")
 
-# Seleccionar las columnas correctas (1, 4, 5, 6, 8, 9, 11) sin omitir la columna A
+# Seleccionar las columnas correctas (1, 3, 7, 10, 11, 12, 13, 14, 15) sin omitir la columna A
 datos <- datos %>%
-  select(c(1, 4, 5, 6, 8, 9, 11)) %>%  # Seleccionar las columnas correctas
+  select(c(1, 3, 7, 10, 11, 12, 13, 14, 15)) %>%  # Seleccionar las columnas correctas
   setNames(nombres_columnas)
 
 # Verificar las columnas después de la selección
