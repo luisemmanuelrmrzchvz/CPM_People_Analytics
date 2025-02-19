@@ -3,95 +3,122 @@ library(readxl)
 library(dplyr)
 library(DBI)
 library(RSQLite)
+library(lubridate)
 
 # Definir la ruta del archivo de Excel
 ruta_archivo <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/CPM_10_Historico_Estados.xlsx"
 
-# Leer el archivo de Excel, omitiendo las primeras 10 filas (la fila 10 contiene los títulos)
+# Leer el archivo de Excel, omitiendo las primeras 10 filas
 datos <- read_excel(ruta_archivo, range = cell_rows(11:100000), col_names = FALSE)
 
-# Verificar la estructura de los datos leídos
-print("Estructura de los datos leídos:")
-print(head(datos))  # Mostrar las primeras filas de los datos
-print(ncol(datos))  # Mostrar el número de columnas
+# Asignar nombres a las columnas seleccionadas (columnas 1, 3, 7, 9-15)
+nombres_columnas <- c("id_ticket", "fecha_creado", "agente_servicio", "prioridad", 
+                      "time_start_status", "time_end_status", "code_estado_ticket", 
+                      "estado_ticket", "siguiente_accion_para", "seg_duracion")
 
-# Asignar nuevos nombres a las columnas seleccionadas
-nombres_columnas <- c("id_ticket", "fecha_creado", "agente_servicio", "time_start_status", "time_end_status", "code_estado_ticket", "estado_ticket", "siguiente_accion_para", "seg_duracion")
-
-# Seleccionar las columnas correctas (1, 3, 7, 10, 11, 12, 13, 14, 15) sin omitir la columna A
+# Seleccionar y renombrar columnas
 datos <- datos %>%
-  select(c(1, 3, 7, 10, 11, 12, 13, 14, 15)) %>%  # Seleccionar las columnas correctas
+  select(c(1, 3, 7, 9, 10, 11, 12, 13, 14, 15)) %>%
   setNames(nombres_columnas)
-
-# Verificar las columnas después de la selección
-print("Columnas después de la selección y renombrado:")
-print(head(datos))
-
-# Eliminar saltos de línea en la columna id_catalog
-datos <- datos %>%
-  mutate(id_catalog = gsub("[\r\n]", "", id_catalog))  # Eliminar saltos de línea
-
-# Extraer solo los números de la columna id_catalog
-datos <- datos %>%
-  mutate(id_catalog = gsub("[^0-9]", "", id_catalog))  # Eliminar todo excepto los números
-
-# Filtrar los registros donde id_catalog sea un INTEGER de 10 dígitos
-datos <- datos %>%
-  filter(grepl("^\\d{10}$", id_catalog))  # Ajustado para 10 dígitos
-
-# Verificar los datos después del filtrado
-print("Datos después del filtrado:")
-print(head(datos))
-
-# Conectar a la base de datos SQLite
-db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
-conn <- dbConnect(SQLite(), db_path)
-
-# Consultar los id_catalog existentes en la tabla catalog_tickets
-id_catalog_validos <- dbGetQuery(conn, "SELECT id_catalog FROM catalog_tickets")$id_catalog
-
-# Filtrar los datos para mantener solo los registros cuyo id_catalog esté en catalog_tickets
-datos <- datos %>%
-  filter(id_catalog %in% id_catalog_validos)
-
-# Verificar los datos después del filtrado
-print("Datos después de validar con catalog_tickets:")
-print(head(datos))
 
 # Eliminar saltos de línea en todas las columnas
 datos <- datos %>%
   mutate(across(everything(), ~ gsub("[\r\n]", "", .)))
 
-# Convertir las columnas de fecha al formato YYYY-MM-DD
-columnas_fecha <- c("fecha_creado", "fecha_interaccion")  # Columnas a formatear como fechas
-for (col in columnas_fecha) {
-  datos[[col]] <- format(as.Date(datos[[col]], format = "%m/%d/%Y"), "%Y-%m-%d")
+# Convertir formatos de fecha y hora
+datos <- datos %>%
+  mutate(
+    fecha_creado = format(as.Date(fecha_creado, format = "%m/%d/%Y"), "%Y-%m-%d"),
+    time_start_status = format(as.POSIXct(time_start_status, 
+                                          format = "%m/%d/%Y %H:%M:%S", tz = "UTC"),
+                               "%Y-%m-%d %H:%M:%S"),
+    time_end_status = format(as.POSIXct(time_end_status,
+                                        format = "%m/%d/%Y %H:%M:%S", tz = "UTC"),
+                             "%Y-%m-%d %H:%M:%S"),
+    id_ticket = as.character(id_ticket)  # Convertir id_ticket a character
+  )
+
+# Conectar a la base de datos SQLite
+db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
+conn <- dbConnect(SQLite(), db_path)
+
+# Obtener tickets válidos y fecha máxima de referencia
+id_ticket_validos <- dbGetQuery(conn, "SELECT id_ticket FROM codigo_tickets")$id_ticket
+max_fecha_db <- dbGetQuery(conn, "SELECT MAX(fecha_creado) FROM hist_status_tickets")[[1]]
+
+# Manejar caso de primera ejecución
+if (is.na(max_fecha_db)) max_fecha_db <- "1900-01-01"
+
+# Filtrar datos por tickets válidos
+datos <- datos %>% filter(id_ticket %in% id_ticket_validos)
+
+# 1. ACTUALIZAR REGISTROS ABIERTOS EXISTENTES
+# ----------------------------------------------------------
+# Obtener registros abiertos de la base de datos
+open_records <- dbGetQuery(conn, 
+                           "SELECT id_ticket, time_start_status 
+   FROM hist_status_tickets 
+   WHERE time_end_status = '9999-12-30 00:00:00' 
+     AND estado_ticket != 'Cerrado'")
+
+# Convertir id_ticket a character en open_records
+open_records <- open_records %>%
+  mutate(id_ticket = as.character(id_ticket))
+
+if (nrow(open_records) > 0) {
+  # Encontrar coincidencias en los datos nuevos
+  actualizaciones <- datos %>%
+    inner_join(open_records, by = c("id_ticket", "time_start_status"))
+  
+  if (nrow(actualizaciones) > 0) {
+    # Actualizar registros en la base de datos
+    for (i in 1:nrow(actualizaciones)) {
+      registro <- actualizaciones[i, ]
+      
+      dbExecute(conn, 
+                "UPDATE hist_status_tickets SET 
+          fecha_creado = ?,
+          agente_servicio = ?,
+          prioridad = ?,
+          time_end_status = ?,
+          code_estado_ticket = ?,
+          estado_ticket = ?,
+          siguiente_accion_para = ?,
+          seg_duracion = ?
+        WHERE id_ticket = ? AND time_start_status = ?",
+                params = list(
+                  registro$fecha_creado,
+                  registro$agente_servicio,
+                  registro$prioridad,
+                  registro$time_end_status,
+                  registro$code_estado_ticket,
+                  registro$estado_ticket,
+                  registro$siguiente_accion_para,
+                  registro$seg_duracion,
+                  registro$id_ticket,
+                  registro$time_start_status
+                )
+      )
+    }
+    print(paste("Actualizados", nrow(actualizaciones), "registros existentes"))
+  }
 }
 
-# Verificar los datos después de convertir las fechas
-print("Datos después de convertir las fechas:")
-print(head(datos))
+# 2. INSERTAR NUEVOS REGISTROS
+# ----------------------------------------------------------
+# Filtrar datos nuevos posteriores a la última fecha registrada
+nuevos_registros <- datos %>%
+  filter(as.Date(fecha_creado) > as.Date(max_fecha_db))
 
-# Consultar los id_ticket existentes en la tabla codigo_tickets
-id_tickets_existentes <- dbGetQuery(conn, "SELECT id_ticket FROM codigo_tickets")$id_ticket
-
-# Filtrar los datos para excluir registros con id_ticket ya existentes
-datos_nuevos <- datos %>%
-  filter(!id_ticket %in% id_tickets_existentes)
-
-# Verificar los datos que se insertarán
-print("Datos que se insertarán en la tabla codigo_tickets:")
-print(head(datos_nuevos))
-
-# Insertar solo los registros nuevos en la tabla codigo_tickets
-if (nrow(datos_nuevos) > 0) {
-  dbWriteTable(conn, "codigo_tickets", datos_nuevos, append = TRUE, row.names = FALSE)
-  print(paste("Se insertaron", nrow(datos_nuevos), "registros nuevos en la tabla codigo_tickets."))
+if (nrow(nuevos_registros) > 0) {
+  # Insertar nuevos registros
+  dbWriteTable(conn, "hist_status_tickets", nuevos_registros, 
+               append = TRUE, row.names = FALSE)
+  print(paste("Insertados", nrow(nuevos_registros), "nuevos registros"))
 } else {
-  print("No hay registros nuevos para insertar.")
+  print("No hay nuevos registros para insertar")
 }
 
-# Cerrar la conexión a la base de datos
+# Cerrar conexión
 dbDisconnect(conn)
-
-print("Proceso completado correctamente.")
+print("Proceso completado exitosamente")
