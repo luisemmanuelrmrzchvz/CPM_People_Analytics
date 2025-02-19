@@ -318,6 +318,7 @@ smtp_send(
   email,
   from = "luis_ramirezC@cpm.coop",  # Tu correo institucional
   to = c("gerardo_nahum@cpm.coop", "bibiana_rico@cpm.coop"),  # Correos de los destinatarios
+  cc = "luis_ramirezC@cpm.coop",  # Correos de destinatarios-copias
   subject = paste("Reporte Monthly SVL C4C -", fecha_anterior),
   credentials = creds
 )
