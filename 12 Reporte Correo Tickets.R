@@ -6,12 +6,14 @@ library(RSQLite)
 library(openxlsx)
 library(blastula)  # Para enviar correos electrónicos
 library(lubridate) # Para manejar fechas
+library(dplyr)     # Para manipulación de datos
+library(ggplot2)
 
 # Conectar a la base de datos SQLite
 db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
 conn <- dbConnect(SQLite(), db_path)
 
-# Definir el query SQL
+# Definir el query SQL (el mismo que proporcionaste)
 query <- "
 -- CURRENT MONTH
 WITH
@@ -168,6 +170,26 @@ datos <- dbGetQuery(conn, query)
 # Desconectar de la base de datos
 dbDisconnect(conn)
 
+# Convertir las columnas de segundos a formato [H]:mm:ss
+columnas_tiempo <- c("tiempo_nuevo", "tiempo_proceso_agente", "tiempo_proceso_cliente", 
+                     "tiempo_propuesta_solucion", "tiempo_solucion_confirmada", 
+                     "total_tiempo", "tiempo_objetivo", "total_tiempo_procesador", 
+                     "total_tiempo_cliente")
+
+datos <- datos %>%
+  mutate(across(all_of(columnas_tiempo), ~ {
+    # Asegurarse de que los valores sean numéricos
+    segundos <- as.numeric(.)
+    # Manejar valores NA (reemplazarlos con 0 o cualquier otro valor predeterminado)
+    segundos <- ifelse(is.na(segundos), 0, segundos)
+    # Convertir segundos a horas, minutos y segundos
+    horas <- floor(segundos / 3600)
+    minutos <- floor((segundos %% 3600) / 60)
+    segundos <- segundos %% 60
+    # Formatear como [H]:mm:ss
+    sprintf("%02d:%02d:%02d", horas, minutos, segundos)
+  }))
+
 # Obtener la fecha del día anterior
 fecha_anterior <- format(Sys.Date() - 1, "%Y-%m-%d")
 
@@ -317,8 +339,8 @@ creds <- creds(
 smtp_send(
   email,
   from = "luis_ramirezC@cpm.coop",  # Tu correo institucional
-  to = c("gerardo_nahum@cpm.coop", "bibiana_rico@cpm.coop"),  # Correos de los destinatarios
-  cc = "luis_ramirezC@cpm.coop",  # Correos de destinatarios-copias
+#  to = c("gerardo_nahum@cpm.coop", "bibiana_rico@cpm.coop"),  # Correos de los destinatarios
+  to = "luis_ramirezC@cpm.coop",  # Correos de destinatarios-copias
   subject = paste("Reporte Monthly SVL C4C -", fecha_anterior),
   credentials = creds
 )
