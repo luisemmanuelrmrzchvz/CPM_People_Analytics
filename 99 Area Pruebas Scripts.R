@@ -198,179 +198,74 @@ dbDisconnect(conn)
 
 
 
-> # Cargar librerías
-  > library(DBI)
-> library(RSQLite)
-> library(lubridate)
-> library(data.table)  # Para procesamiento rápido
-> 
-  > # Conectar a la base de datos SQLite
-  > db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
-> conn <- dbConnect(SQLite(), db_path)
-> 
-  > # ------------------------------------------------------------------------------ 
-> # Función optimizada para calcular segundos en horario laboral sin bucles lentos
-  > # ------------------------------------------------------------------------------
-> 
-  > calculate_effective_seconds <- function(start, end) {
-    +   if (is.na(start) || is.na(end) || start >= end) {
-      +     return(0)
-      +   }
-    + 
-      +   # Definir horarios de trabajo
-      +   weekdays_hours <- c("09:00:00", "18:00:00")  
-      +   saturday_hours <- c("09:00:00", "14:00:00")  
-      + 
-        +   # Crear secuencia de días laborables
-        +   days_seq <- seq(as.Date(start), as.Date(end), by = "day")
-        +   working_seconds <- 0
-        + 
-          +   for (day in days_seq) {
-            +     weekday <- wday(day)  # Ajuste aquí, eliminando label = FALSE
-            + 
-              +     if (weekday %in% 2:6) {  # Lunes a viernes (lubridate usa 2 = lunes, 6 = viernes)
-                +       work_start <- as.POSIXct(paste(day, weekdays_hours[1]), tz = "America/Mexico_City")
-                +       work_end <- as.POSIXct(paste(day, weekdays_hours[2]), tz = "America/Mexico_City")
-                +     } else if (weekday == 7) {  # Sábado
-                  +       work_start <- as.POSIXct(paste(day, saturday_hours[1]), tz = "America/Mexico_City")
-                  +       work_end <- as.POSIXct(paste(day, saturday_hours[2]), tz = "America/Mexico_City")
-                  +     } else {
-                    +       next  # Saltar domingos (weekday == 1)
-                    +     }
-            + 
-              +     # Calcular intersección del tiempo dentro del horario laboral
-              +     interval_start <- max(start, work_start)
-              +     interval_end <- min(end, work_end)
-              + 
-                +     if (interval_start < interval_end) {
-                  +       working_seconds <- working_seconds + as.numeric(difftime(interval_end, interval_start, units = "secs"))
-                  +     }
-              +   }
-        + 
-          +   return(working_seconds)
-        + }
-> 
-  > # ------------------------------------------------------------------------------ 
-> # Poblar la tabla espejo por primera vez con optimización
-  > # ------------------------------------------------------------------------------
-> 
-  > query <- "SELECT * FROM hist_status_tickets;"
-> data <- dbGetQuery(conn, query)
-Aviso:
-  Column `code_estado_ticket`: mixed type, first seen values of type integer, coercing other values of type string 
-> 
-  > # Convertir a data.table para procesamiento más rápido
-  > data <- as.data.table(data)
-> 
-  > # Asegurar que `code_estado_ticket` sea numérico para evitar errores de comparación
-  > data[, code_estado_ticket := as.numeric(code_estado_ticket)]
-> 
-  > # Aplicar condición especial
-  > data[, time_end_status := fifelse(code_estado_ticket == 6, time_start_status, time_end_status)]
-> 
-  > # Calcular duración en segundos sin usar `mapply()`
-  > data[, seg_duracion := fifelse(code_estado_ticket == 6, 0, calculate_effective_seconds(time_start_status, time_end_status)), by = id_key]
-Error en as.POSIXlt.character(x, tz, ...): 
-  la cadena de caracteres no está en un formato estándar inequívoco
-10.
-stop("character string is not in a standard unambiguous format")
-9.
-as.POSIXlt.character(x, tz, ...)
-8.
-as.POSIXlt(x, tz, ...)
-7.
-as.POSIXct(as.POSIXlt(x, tz, ...), tz, ...)
-6.
-as.POSIXct.default(paste(day, weekdays_hours[1]), tz = "America/Mexico_City")
-5.
-as.POSIXct(paste(day, weekdays_hours[1]), tz = "America/Mexico_City")
-4.
-calculate_effective_seconds(time_start_status, time_end_status)
-3.
-fifelse(code_estado_ticket == 6, 0, calculate_effective_seconds(time_start_status,
-                                                                time_end_status))
-2.
-`[.data.table`(data, , `:=`(seg_duracion, fifelse(code_estado_ticket ==
-                                                    6, 0, calculate_effective_seconds(time_start_status, time_end_status))),
-               by = id_key)
-1.
-data[, `:=`(seg_duracion, fifelse(code_estado_ticket == 6, 0,
-                                  calculate_effective_seconds(time_start_status, time_end_status))),
-     by = id_key]
+# Cargar librerías
+library(DBI)
+library(RSQLite)
+library(lubridate)
+library(data.table)  # Para procesamiento rápido
 
-> # Cargar librerías
-  > library(DBI)
-> library(RSQLite)
-> library(lubridate)
-> library(data.table)  # Para procesamiento rápido
-> 
-  > # Conectar a la base de datos SQLite
-  > db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
-> conn <- dbConnect(SQLite(), db_path)
-> 
-  > # ------------------------------------------------------------------------------ 
-> # Función optimizada para calcular segundos en horario laboral sin bucles lentos
-  > # ------------------------------------------------------------------------------
-> 
-  > calculate_effective_seconds <- function(start, end) {
-    +   if (is.na(start) || is.na(end) || start >= end) {
-      +     return(0)
-      +   }
-    + 
-      +   # Definir horarios de trabajo
-      +   weekdays_hours <- c("09:00:00", "18:00:00")  
-      +   saturday_hours <- c("09:00:00", "14:00:00")  
-      + 
-        +   # Crear secuencia de días laborables
-        +   days_seq <- seq(as.Date(start), as.Date(end), by = "day")
-        +   working_seconds <- 0
-        + 
-          +   for (day in days_seq) {
-            +     weekday <- wday(day)  # Ajuste aquí, eliminando label = FALSE
-            + 
-              +     if (weekday %in% 2:6) {  # Lunes a viernes (lubridate usa 2 = lunes, 6 = viernes)
-                +       work_start <- as.POSIXct(paste(day, weekdays_hours[1]), tz = "America/Mexico_City")
-                +       work_end <- as.POSIXct(paste(day, weekdays_hours[2]), tz = "America/Mexico_City")
-                +     } else if (weekday == 7) {  # Sábado
-                  +       work_start <- as.POSIXct(paste(day, saturday_hours[1]), tz = "America/Mexico_City")
-                  +       work_end <- as.POSIXct(paste(day, saturday_hours[2]), tz = "America/Mexico_City")
-                  +     } else {
-                    +       next  # Saltar domingos (weekday == 1)
-                    +     }
-            + 
-              +     # Calcular intersección del tiempo dentro del horario laboral
-              +     interval_start <- max(start, work_start)
-              +     interval_end <- min(end, work_end)
-              + 
-                +     if (interval_start < interval_end) {
-                  +       working_seconds <- working_seconds + as.numeric(difftime(interval_end, interval_start, units = "secs"))
-                  +     }
-              +   }
-        + 
-          +   return(working_seconds)
-        + }
-> 
-  > # ------------------------------------------------------------------------------ 
-> # Poblar la tabla espejo por primera vez con optimización
-  > # ------------------------------------------------------------------------------
-> 
-  > query <- "SELECT * FROM hist_status_tickets;"
-> data <- dbGetQuery(conn, query)
-Aviso:
-  Column `code_estado_ticket`: mixed type, first seen values of type integer, coercing other values of type string 
-> 
-  > # Convertir a data.table para procesamiento más rápido
-  > data <- as.data.table(data)
-> 
-  > # Asegurar que `code_estado_ticket` sea numérico para evitar errores de comparación
-  > data[, code_estado_ticket := as.numeric(code_estado_ticket)]
-> 
-  > # Aplicar condición especial
-  > data[, time_end_status := fifelse(code_estado_ticket == 6, time_start_status, time_end_status)]
-> 
-  > # Calcular duración en segundos sin usar `mapply()`
-  > data[, seg_duracion := fifelse(code_estado_ticket == 6, 0, calculate_effective_seconds(time_start_status, time_end_status)), by = id_key]
-Error en as.POSIXlt.character(x, tz, ...): 
-  la cadena de caracteres no está en un formato estándar inequívoco
-Called from: as.POSIXlt.character(x, tz, ...)
-Browse[1]> 
+# Conectar a la base de datos SQLite
+db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
+conn <- dbConnect(SQLite(), db_path)
+
+# Función optimizada para calcular segundos en horario laboral sin bucles lentos
+calculate_effective_seconds <- function(start, end) {
+  if (is.na(start) || is.na(end) || start >= end) {
+    return(0)
+  }
+  
+  # Definir horarios de trabajo
+  weekdays_hours <- c("09:00:00", "18:00:00")  
+  saturday_hours <- c("09:00:00", "14:00:00")  
+  
+  # Crear secuencia de días laborables
+  days_seq <- seq(as.Date(start), as.Date(end), by = "day")
+  working_seconds <- 0
+  
+  for (day in days_seq) {
+    weekday <- wday(day)  # lubridate usa 1 = domingo, 2 = lunes, ..., 7 = sábado
+    
+    if (weekday %in% 2:6) {  # Lunes a viernes
+      work_start <- as.POSIXct(paste(day, weekdays_hours[1]), tz = "America/Mexico_City")
+      work_end <- as.POSIXct(paste(day, weekdays_hours[2]), tz = "America/Mexico_City")
+    } else if (weekday == 7) {  # Sábado
+      work_start <- as.POSIXct(paste(day, saturday_hours[1]), tz = "America/Mexico_City")
+      work_end <- as.POSIXct(paste(day, saturday_hours[2]), tz = "America/Mexico_City")
+    } else {
+      next  # Saltar domingos (weekday == 1)
+    }
+    
+    # Calcular intersección del tiempo dentro del horario laboral
+    interval_start <- max(start, work_start)
+    interval_end <- min(end, work_end)
+    
+    if (interval_start < interval_end) {
+      working_seconds <- working_seconds + as.numeric(difftime(interval_end, interval_start, units = "secs"))
+    }
+  }
+  
+  return(working_seconds)
+}
+
+# Poblar la tabla espejo por primera vez con optimización
+query <- "SELECT * FROM hist_status_tickets;"
+data <- dbGetQuery(conn, query)
+
+# Convertir a data.table para procesamiento más rápido
+data <- as.data.table(data)
+
+# Asegurar que `code_estado_ticket` sea numérico para evitar errores de comparación
+data[, code_estado_ticket := as.numeric(code_estado_ticket)]
+
+# Convertir `time_start_status` y `time_end_status` a POSIXct
+data[, time_start_status := as.POSIXct(time_start_status, format = "%Y-%m-%d %H:%M:%S", tz = "America/Mexico_City")]
+data[, time_end_status := as.POSIXct(time_end_status, format = "%Y-%m-%d %H:%M:%S", tz = "America/Mexico_City")]
+
+# Aplicar condición especial
+data[, time_end_status := fifelse(code_estado_ticket == 6, time_start_status, time_end_status)]
+
+# Calcular duración en segundos sin usar `mapply()`
+data[, seg_duracion := fifelse(code_estado_ticket == 6, 0, calculate_effective_seconds(time_start_status, time_end_status)), by = id_key]
+
+# Desconectar base de datos
+dbDisconnect(conn)
