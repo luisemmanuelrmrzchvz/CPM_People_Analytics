@@ -178,3 +178,87 @@ dbDisconnect(conn)
 
 cat("✅ Proceso completado: Tabla hist_status_tickets_sw inicializada en forma optimizada.\n")
 
+
+######################################################
+> # Cargar librerías
+  > library(DBI)
+> library(RSQLite)
+> library(lubridate)
+> library(data.table)  # Para procesamiento rápido
+data.table 1.16.4 usando 6 hilos (ver ?getDTthreads).  Últimas novedades: r-datatable.com
+**********
+  Ejecutando data.table en Español; El soporte del paquete está disponible solo en inglés. Cuando busque ayuda en línea, asegúrese de comprobar también el mensaje de error en inglés. Esto se puede obtener mirando los archivos po/R-<locale>.po y po/<locale>.po en el código fuente del paquete, donde se pueden encontrar los mensajes de error en el idioma nativo y en inglés uno al lado del otro
+* *********
+  
+  Adjuntando el paquete: ‘data.table’
+
+The following objects are masked from ‘package:lubridate’:
+  
+  hour, isoweek, mday, minute, month, quarter, second, wday, week, yday, year
+
+The following objects are masked from ‘package:dplyr’:
+  
+  between, first, last
+
+> 
+  > # Conectar a la base de datos SQLite
+  > db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
+> conn <- dbConnect(SQLite(), db_path)
+> 
+  > # ------------------------------------------------------------------------------ 
+> # Función optimizada para calcular segundos en horario laboral sin bucles lentos
+  > # ------------------------------------------------------------------------------
+> calculate_effective_seconds <- function(start, end) {
+  +   if (is.na(start) || is.na(end) || start >= end) {
+    +     return(0)
+    +   }
+  + 
+    +   # Definir horarios de trabajo
+    +   weekdays_hours <- c("09:00:00", "18:00:00")  
+    +   saturday_hours <- c("09:00:00", "14:00:00")  
+    + 
+      +   # Crear secuencia de días laborables
+      +   days_seq <- seq(as.Date(start), as.Date(end), by = "day")
+      +   working_seconds <- 0
+      + 
+        +   for (day in days_seq) {
+          +     weekday <- wday(day, week_start = 1)
+          + 
+            +     if (weekday %in% 1:5) {  # Lunes a viernes
+              +       work_start <- as.POSIXct(paste(day, weekdays_hours[1]), tz = "America/Mexico_City")
+              +       work_end <- as.POSIXct(paste(day, weekdays_hours[2]), tz = "America/Mexico_City")
+              +     } else if (weekday == 6) {  # Sábado
+                +       work_start <- as.POSIXct(paste(day, saturday_hours[1]), tz = "America/Mexico_City")
+                +       work_end <- as.POSIXct(paste(day, saturday_hours[2]), tz = "America/Mexico_City")
+                +     } else {
+                  +       next  # Saltar domingos
+                  +     }
+          + 
+            +     # Calcular intersección del tiempo dentro del horario laboral
+            +     interval_start <- max(start, work_start)
+            +     interval_end <- min(end, work_end)
+            + 
+              +     if (interval_start < interval_end) {
+                +       working_seconds <- working_seconds + as.numeric(difftime(interval_end, interval_start, units = "secs"))
+                +     }
+            +   }
+      + 
+        +   return(working_seconds)
+      + }
+> 
+  > # ------------------------------------------------------------------------------ 
+> # Poblar la tabla espejo por primera vez con optimización
+  > # ------------------------------------------------------------------------------
+> query <- "SELECT * FROM hist_status_tickets;"
+> data <- dbGetQuery(conn, query)
+Aviso:
+  Column `code_estado_ticket`: mixed type, first seen values of type integer, coercing other values of type string 
+> 
+  > # Convertir a data.table para procesamiento más rápido
+  > data <- as.data.table(data)
+> 
+  > # Aplicar condición especial sin `mapply()`
+  > data[, time_end_status := fifelse(code_estado_ticket == 6, time_start_status, time_end_status)]
+> data[, seg_duracion := fifelse(code_estado_ticket == 6, 0, calculate_effective_seconds(time_start_status, time_end_status)), by = id_key]
+Error en wday(day, week_start = 1): 
+  el argumento no fue usado (week_start = 1)
