@@ -110,74 +110,71 @@ cat("✅ El archivo ha sido guardado en:", output_path, "\n")
 library(DBI)
 library(RSQLite)
 library(lubridate)
-library(dplyr)
+library(data.table)  # Para procesamiento rápido
 
 # Conectar a la base de datos SQLite
 db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
 conn <- dbConnect(SQLite(), db_path)
 
 # ------------------------------------------------------------------------------ 
-# Función optimizada para calcular segundos dentro de la ventana de servicio
+# Función optimizada para calcular segundos en horario laboral sin bucles lentos
 # ------------------------------------------------------------------------------
-calculate_effective_seconds <- function(start_str, end_str) {
-  if (is.na(start_str) || is.na(end_str) || start_str >= end_str) {
+calculate_effective_seconds <- function(start, end) {
+  if (is.na(start) || is.na(end) || start >= end) {
     return(0)
   }
 
-  # Convertir a zona horaria de México
-  start <- with_tz(as.POSIXct(start_str, tz = "UTC"), "America/Mexico_City")
-  end <- with_tz(as.POSIXct(end_str, tz = "UTC"), "America/Mexico_City")
-  
-  total_seconds <- 0
-  current_date <- as.Date(start)
-  end_date <- as.Date(end)
+  # Definir horarios de trabajo
+  weekdays_hours <- c("09:00:00", "18:00:00")  
+  saturday_hours <- c("09:00:00", "14:00:00")  
 
-  while (current_date <= end_date) {
-    day_of_week <- wday(current_date, week_start = 1)  # 1 = lunes, 7 = domingo
-    
-    # Definir ventana de servicio
-    if (day_of_week %in% 1:5) {  
-      day_start <- as.POSIXct(paste(current_date, "09:00:00"), tz = "America/Mexico_City")
-      day_end <- as.POSIXct(paste(current_date, "18:00:00"), tz = "America/Mexico_City")
-    } else if (day_of_week == 6) {  
-      day_start <- as.POSIXct(paste(current_date, "09:00:00"), tz = "America/Mexico_City")
-      day_end <- as.POSIXct(paste(current_date, "14:00:00"), tz = "America/Mexico_City")
-    } else {  
-      current_date <- current_date + 1
-      next
+  # Crear secuencia de días laborables
+  days_seq <- seq(as.Date(start), as.Date(end), by = "day")
+  working_seconds <- 0
+
+  for (day in days_seq) {
+    weekday <- wday(day, week_start = 1)
+
+    if (weekday %in% 1:5) {  # Lunes a viernes
+      work_start <- as.POSIXct(paste(day, weekdays_hours[1]), tz = "America/Mexico_City")
+      work_end <- as.POSIXct(paste(day, weekdays_hours[2]), tz = "America/Mexico_City")
+    } else if (weekday == 6) {  # Sábado
+      work_start <- as.POSIXct(paste(day, saturday_hours[1]), tz = "America/Mexico_City")
+      work_end <- as.POSIXct(paste(day, saturday_hours[2]), tz = "America/Mexico_City")
+    } else {
+      next  # Saltar domingos
     }
-    
-    # Calcular segundos dentro de la ventana
-    interval_start <- max(start, day_start)
-    interval_end <- min(end, day_end)
+
+    # Calcular intersección del tiempo dentro del horario laboral
+    interval_start <- max(start, work_start)
+    interval_end <- min(end, work_end)
 
     if (interval_start < interval_end) {
-      total_seconds <- total_seconds + as.numeric(difftime(interval_end, interval_start, units = "secs"))
+      working_seconds <- working_seconds + as.numeric(difftime(interval_end, interval_start, units = "secs"))
     }
-    
-    current_date <- current_date + 1
   }
-  
-  return(total_seconds)
+
+  return(working_seconds)
 }
 
 # ------------------------------------------------------------------------------ 
-# Poblar la tabla espejo por primera vez
+# Poblar la tabla espejo por primera vez con optimización
 # ------------------------------------------------------------------------------
 query <- "SELECT * FROM hist_status_tickets;"
 data <- dbGetQuery(conn, query)
 
-# Aplicar la condición especial para `code_estado_ticket = 6`
-data <- data %>%
-  mutate(
-    time_end_status = ifelse(code_estado_ticket == 6, time_start_status, time_end_status),
-    seg_duracion = ifelse(code_estado_ticket == 6, 0, mapply(calculate_effective_seconds, time_start_status, time_end_status))
-  )
+# Convertir a data.table para procesamiento más rápido
+data <- as.data.table(data)
 
-# Insertar datos en la tabla espejo
+# Aplicar condición especial sin `mapply()`
+data[, time_end_status := fifelse(code_estado_ticket == 6, time_start_status, time_end_status)]
+data[, seg_duracion := fifelse(code_estado_ticket == 6, 0, calculate_effective_seconds(time_start_status, time_end_status)), by = id_key]
+
+# Insertar en la tabla espejo
 dbWriteTable(conn, "hist_status_tickets_sw", data, overwrite = TRUE, row.names = FALSE)
 
 # Cerrar conexión
 dbDisconnect(conn)
 
-cat("Proceso completado: Tabla hist_status_tickets_sw inicializada.\n")
+cat("✅ Proceso completado: Tabla hist_status_tickets_sw inicializada en forma optimizada.\n")
+
