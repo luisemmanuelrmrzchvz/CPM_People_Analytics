@@ -106,166 +106,174 @@ cat("✅ El archivo ha sido guardado en:", output_path, "\n")
 ########################################################################
 ########################################################################
 
-# Cargar librerías
-library(DBI)
-library(RSQLite)
-library(lubridate)
-library(data.table)  # Para procesamiento rápido
 
-# Conectar a la base de datos SQLite
-db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
-conn <- dbConnect(SQLite(), db_path)
 
-# ------------------------------------------------------------------------------ 
-# Función optimizada para calcular segundos en horario laboral sin bucles lentos
+library(reticulate)
+
+# Importar las bibliotecas de Python
+pd <- import("pandas")
+sqlite3 <- import("sqlite3")
+pytz <- import("pytz")
+
 # ------------------------------------------------------------------------------
-
-calculate_effective_seconds <- function(start, end) {
-  if (is.na(start) || is.na(end) || start >= end) {
-    return(0)
-  }
-
-  # Definir horarios de trabajo
-  weekdays_hours <- c("09:00:00", "18:00:00")  
-  saturday_hours <- c("09:00:00", "14:00:00")  
-
-  # Crear secuencia de días laborables
-  days_seq <- seq(as.Date(start), as.Date(end), by = "day")
-  working_seconds <- 0
-
-  for (day in days_seq) {
-    weekday <- wday(day)  # Ajuste aquí, eliminando label = FALSE
-
-    if (weekday %in% 2:6) {  # Lunes a viernes (lubridate usa 2 = lunes, 6 = viernes)
-      work_start <- as.POSIXct(paste(day, weekdays_hours[1]), tz = "America/Mexico_City")
-      work_end <- as.POSIXct(paste(day, weekdays_hours[2]), tz = "America/Mexico_City")
-    } else if (weekday == 7) {  # Sábado
-      work_start <- as.POSIXct(paste(day, saturday_hours[1]), tz = "America/Mexico_City")
-      work_end <- as.POSIXct(paste(day, saturday_hours[2]), tz = "America/Mexico_City")
-    } else {
-      next  # Saltar domingos (weekday == 1)
-    }
-
-    # Calcular intersección del tiempo dentro del horario laboral
-    interval_start <- max(start, work_start)
-    interval_end <- min(end, work_end)
-
-    if (interval_start < interval_end) {
-      working_seconds <- working_seconds + as.numeric(difftime(interval_end, interval_start, units = "secs"))
-    }
-  }
-
-  return(working_seconds)
-}
-
-# ------------------------------------------------------------------------------ 
-# Poblar la tabla espejo por primera vez con optimización
+# Funciones en Python para el cálculo (CON ZONAS HORARIAS)
 # ------------------------------------------------------------------------------
+py_run_string("
+import pytz
+from datetime import datetime, timedelta
+import pandas as pd
 
-query <- "SELECT * FROM hist_status_tickets;"
-data <- dbGetQuery(conn, query)
-
-# Convertir a data.table para procesamiento más rápido
-data <- as.data.table(data)
-
-# Asegurar que `code_estado_ticket` sea numérico para evitar errores de comparación
-data[, code_estado_ticket := as.numeric(code_estado_ticket)]
-
-# Aplicar condición especial
-data[, time_end_status := fifelse(code_estado_ticket == 6, time_start_status, time_end_status)]
-
-# Calcular duración en segundos sin usar `mapply()`
-data[, seg_duracion := fifelse(code_estado_ticket == 6, 0, calculate_effective_seconds(time_start_status, time_end_status)), by = id_key]
-
-# Cerrar la conexión a la base de datos
-dbDisconnect(conn)
-
-
-
-
-
-
-
-
-
-
-
-
-
-#########################################################################
-
-
-
-
-
-# Cargar librerías
-library(DBI)
-library(RSQLite)
-library(lubridate)
-library(data.table)  # Para procesamiento rápido
-
-# Conectar a la base de datos SQLite
-db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
-conn <- dbConnect(SQLite(), db_path)
-
-# Función optimizada para calcular segundos en horario laboral sin bucles lentos
-calculate_effective_seconds <- function(start, end) {
-  if (is.na(start) || is.na(end) || start >= end) {
-    return(0)
-  }
-  
-  # Definir horarios de trabajo
-  weekdays_hours <- c("09:00:00", "18:00:00")  
-  saturday_hours <- c("09:00:00", "14:00:00")  
-  
-  # Crear secuencia de días laborables
-  days_seq <- seq(as.Date(start), as.Date(end), by = "day")
-  working_seconds <- 0
-  
-  for (day in days_seq) {
-    weekday <- wday(day)  # lubridate usa 1 = domingo, 2 = lunes, ..., 7 = sábado
+def calculate_effective_seconds(start_utc, end_utc):
+    # Convertir UTC a CST (Ciudad de México)
+    utc_zone = pytz.utc
+    cst_zone = pytz.timezone('America/Mexico_City')
     
-    if (weekday %in% 2:6) {  # Lunes a viernes
-      work_start <- as.POSIXct(paste(day, weekdays_hours[1]), tz = "America/Mexico_City")
-      work_end <- as.POSIXct(paste(day, weekdays_hours[2]), tz = "America/Mexico_City")
-    } else if (weekday == 7) {  # Sábado
-      work_start <- as.POSIXct(paste(day, saturday_hours[1]), tz = "America/Mexico_City")
-      work_end <- as.POSIXct(paste(day, saturday_hours[2]), tz = "America/Mexico_City")
-    } else {
-      next  # Saltar domingos (weekday == 1)
-    }
-    
-    # Calcular intersección del tiempo dentro del horario laboral
-    interval_start <- max(start, work_start)
-    interval_end <- min(end, work_end)
-    
-    if (interval_start < interval_end) {
-      working_seconds <- working_seconds + as.numeric(difftime(interval_end, interval_start, units = "secs"))
-    }
-  }
-  
-  return(working_seconds)
-}
+    start = start_utc.astimezone(cst_zone) if start_utc.tzinfo else utc_zone.localize(start_utc).astimezone(cst_zone)
+    end = end_utc.astimezone(cst_zone) if end_utc.tzinfo else utc_zone.localize(end_utc).astimezone(cst_zone)
 
-# Poblar la tabla espejo por primera vez con optimización
-query <- "SELECT * FROM hist_status_tickets;"
-data <- dbGetQuery(conn, query)
+    if end == start:
+        return 0
+    if pd.isna(start) or pd.isna(end) or start >= end:
+        return 0
 
-# Convertir a data.table para procesamiento más rápido
-data <- as.data.table(data)
+    total_seconds = 0
+    current_date = start.date()
+    end_date = end.date()
 
-# Asegurar que `code_estado_ticket` sea numérico para evitar errores de comparación
-data[, code_estado_ticket := as.numeric(code_estado_ticket)]
+    while current_date <= end_date:
+        day_of_week = current_date.weekday()
 
-# Convertir `time_start_status` y `time_end_status` a POSIXct
-data[, time_start_status := as.POSIXct(time_start_status, format = "%Y-%m-%d %H:%M:%S", tz = "America/Mexico_City")]
-data[, time_end_status := as.POSIXct(time_end_status, format = "%Y-%m-%d %H:%M:%S", tz = "America/Mexico_City")]
+        # Definir ventanas de servicio en CST
+        if day_of_week in range(5):  # Lunes a viernes (0-4)
+            servicio_start = cst_zone.localize(datetime.combine(current_date, datetime.strptime('09:00:00', '%H:%M:%S').time()))
+            servicio_end = cst_zone.localize(datetime.combine(current_date, datetime.strptime('18:00:00', '%H:%M:%S').time()))
+        elif day_of_week == 5:  # Sábado (5)
+            servicio_start = cst_zone.localize(datetime.combine(current_date, datetime.strptime('09:00:00', '%H:%M:%S').time()))
+            servicio_end = cst_zone.localize(datetime.combine(current_date, datetime.strptime('14:00:00', '%H:%M:%S').time()))
+        else:  # Domingo (6)
+            current_date += timedelta(days=1)
+            continue
 
-# Aplicar condición especial
-data[, time_end_status := fifelse(code_estado_ticket == 6, time_start_status, time_end_status)]
+        # Asegurar que los intervalos están en CST
+        interval_start = max(start, servicio_start)
+        interval_end = min(end, servicio_end)
 
-# Calcular duración en segundos sin usar `mapply()`
-data[, seg_duracion := fifelse(code_estado_ticket == 6, 0, calculate_effective_seconds(time_start_status, time_end_status)), by = id_key]
+        if interval_start < interval_end:
+            total_seconds += (interval_end - interval_start).total_seconds()
 
-# Desconectar base de datos
-dbDisconnect(conn)
+        current_date += timedelta(days=1)
+
+    return total_seconds
+
+def calculate_row_seconds(row):
+    try:
+        if row['code_estado_ticket'] != '6':
+            return calculate_effective_seconds(row['time_start_status'], row['time_end_status_parsed'])
+        else:
+            return 0
+    except Exception as e:
+        print(f'Error en fila {row.name}: {str(e)}')
+        return 0
+")
+
+# ------------------------------------------------------------------------------
+# Conectar a la base de datos y procesar (CONVERSIÓN UTC -> CST)
+# ------------------------------------------------------------------------------
+py_run_string("
+import sqlite3
+import pandas as pd
+import pytz
+from datetime import datetime, timedelta
+
+# Conectar a la base de datos
+conn = sqlite3.connect('C:/Users/racl26345/Documents/DataBases/people_analytics.db')
+
+# Consulta SQL
+query = '''
+    SELECT 
+        id_key, id_ticket, fecha_creado, agente_servicio, prioridad,
+        time_start_status, 
+        CASE 
+            WHEN code_estado_ticket = 6 THEN time_start_status 
+            ELSE time_end_status 
+        END AS time_end_status,
+        CAST(code_estado_ticket AS TEXT) AS code_estado_ticket,
+        estado_ticket, siguiente_accion_para,
+        seg_duracion
+    FROM hist_status_tickets
+    WHERE id_key NOT IN (SELECT id_key FROM hist_status_tickets_sw);
+'''
+
+# Leer datos en DataFrame
+nuevos_registros = pd.read_sql_query(query, conn)
+
+# Guardar el time_end_status original como string
+nuevos_registros['original_time_end_status'] = nuevos_registros['time_end_status']
+
+# Convertir a datetime con zona horaria UTC
+nuevos_registros['time_start_status'] = pd.to_datetime(
+    nuevos_registros['time_start_status'],
+    format='%Y-%m-%d %H:%M:%S',
+    errors='coerce'
+).dt.tz_localize('UTC')
+
+# Parsear time_end_status, manteniendo los originales
+nuevos_registros['time_end_status_parsed'] = pd.to_datetime(
+    nuevos_registros['time_end_status'],
+    format='%Y-%m-%d %H:%M:%S',
+    errors='coerce'
+).dt.tz_localize('UTC')
+
+# Obtener la fecha actual en CST
+cst = pytz.timezone('America/Mexico_City')
+now_cst = datetime.now(cst)
+current_date_cst = now_cst.date()
+
+# Función para obtener dynamic_end_utc
+def get_dynamic_end_utc(current_date):
+    day_of_week = current_date.weekday()
+    if day_of_week in range(5):  # Lunes a viernes
+        end_time = datetime.strptime('18:00:00', '%H:%M:%S').time()
+        effective_date = current_date
+    elif day_of_week == 5:  # Sábado
+        end_time = datetime.strptime('14:00:00', '%H:%M:%S').time()
+        effective_date = current_date
+    else:  # Domingo
+        effective_date = current_date - timedelta(days=1)
+        end_time = datetime.strptime('14:00:00', '%H:%M:%S').time()
+
+    naive = datetime.combine(effective_date, end_time)
+    localized = cst.localize(naive)
+    return localized.astimezone(pytz.UTC)
+
+dynamic_end_utc = get_dynamic_end_utc(current_date_cst)
+
+# Reemplazar NaT en time_end_status_parsed para tickets abiertos
+mask = (nuevos_registros['code_estado_ticket'] != '6') & nuevos_registros['time_end_status_parsed'].isna()
+nuevos_registros.loc[mask, 'time_end_status_parsed'] = dynamic_end_utc
+
+# Calcular seg_duracion usando time_end_status_parsed
+nuevos_registros['seg_duracion'] = nuevos_registros.apply(calculate_row_seconds, axis=1)
+
+# Convertir a CST y eliminar zona horaria
+nuevos_registros['time_start_status'] = nuevos_registros['time_start_status'].dt.tz_convert('America/Mexico_City').dt.tz_localize(None)
+nuevos_registros['time_end_status_parsed'] = nuevos_registros['time_end_status_parsed'].dt.tz_convert('America/Mexico_City').dt.tz_localize(None)
+
+# Restaurar original_time_end_status para tickets abiertos
+nuevos_registros['time_end_status'] = nuevos_registros.apply(
+    lambda row: row['original_time_end_status'] if (row['code_estado_ticket'] != '6' and pd.isna(pd.to_datetime(row['original_time_end_status'], errors='coerce'))) else row['time_end_status_parsed'].strftime('%Y-%m-%d %H:%M:%S'),
+    axis=1
+)
+
+# Eliminar columnas temporales
+nuevos_registros = nuevos_registros.drop(columns=['time_end_status_parsed', 'original_time_end_status'])
+
+# Guardar resultados en la tabla espejo
+nuevos_registros.to_sql('hist_status_tickets_sw', conn, if_exists='append', index=False)
+
+# Cerrar conexión
+conn.close()
+")
+
+# Mensaje de finalización
+cat("¡Proceso completado con conversión UTC -> CST a las", format(Sys.time(), "%H:%M:%S"), "\n")
