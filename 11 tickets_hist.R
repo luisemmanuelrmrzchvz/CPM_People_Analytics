@@ -8,26 +8,14 @@ library(lubridate)
 # Definir la ruta del archivo de Excel
 ruta_archivo <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/CPM_10_Historico_Estados.xlsx"
 
-# Leer el archivo de Excel, omitiendo las primeras 10 filas
-datos <- read_excel(ruta_archivo, range = cell_rows(11:100000), col_names = FALSE)
-
-# Asignar nombres a las columnas seleccionadas (columnas 1, 3, 7, 9-15)
-nombres_columnas <- c("id_ticket", "fecha_creado", "agente_servicio", "prioridad", 
-                      "time_start_status", "time_end_status", "code_estado_ticket", 
-                      "estado_ticket", "siguiente_accion_para", "seg_duracion")
-
-# Seleccionar y renombrar columnas
-datos <- datos %>%
+# Leer y preparar datos
+datos <- read_excel(ruta_archivo, range = cell_rows(11:100000), col_names = FALSE) %>%
   select(c(1, 3, 7, 9, 10, 11, 12, 13, 14, 15)) %>%
-  setNames(nombres_columnas)
-
-# Eliminar saltos de línea en todas las columnas
-datos <- datos %>%
-  mutate(across(everything(), ~ gsub("[\r\n]", "", .)))
-
-# Convertir formatos de fecha y hora
-datos <- datos %>%
+  setNames(c("id_ticket", "fecha_creado", "agente_servicio", "prioridad", 
+             "time_start_status", "time_end_status", "code_estado_ticket", 
+             "estado_ticket", "siguiente_accion_para", "seg_duracion")) %>%
   mutate(
+    across(everything(), ~ gsub("[\r\n]", "", .)),
     fecha_creado = format(as.Date(fecha_creado, format = "%m/%d/%Y"), "%Y-%m-%d"),
     time_start_status = format(as.POSIXct(time_start_status, 
                                           format = "%m/%d/%Y %H:%M:%S", tz = "UTC"),
@@ -35,84 +23,86 @@ datos <- datos %>%
     time_end_status = format(as.POSIXct(time_end_status,
                                         format = "%m/%d/%Y %H:%M:%S", tz = "UTC"),
                              "%Y-%m-%d %H:%M:%S"),
-    id_ticket = as.character(id_ticket)  # Convertir id_ticket a character
+    id_ticket = as.character(id_ticket),
+    code_estado_ticket = as.character(code_estado_ticket)  # Asegurar que sea character
   )
 
-# Conectar a la base de datos SQLite
+# Conectar a la base de datos
 db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
 conn <- dbConnect(SQLite(), db_path)
 
-# Obtener tickets válidos y fecha máxima de referencia
+# Obtener tickets válidos y registros existentes
 id_ticket_validos <- dbGetQuery(conn, "SELECT id_ticket FROM codigo_tickets")$id_ticket
-max_fecha_db <- dbGetQuery(conn, "SELECT MAX(fecha_creado) FROM hist_status_tickets")[[1]]
+existentes <- dbGetQuery(conn, 
+                         "SELECT id_ticket, time_start_status, code_estado_ticket 
+   FROM hist_status_tickets") %>%
+  mutate(
+    id_ticket = as.character(id_ticket),
+    code_estado_ticket = as.character(code_estado_ticket)  # Convertir a character
+  )
 
-# Manejar caso de primera ejecución
-if (is.na(max_fecha_db)) max_fecha_db <- "1900-01-01"
+# Filtrar y preparar datos
+datos <- datos %>%
+  filter(id_ticket %in% id_ticket_validos) %>%
+  mutate(id_ticket = as.character(id_ticket)) %>%
+  anti_join(existentes, by = c("id_ticket", "time_start_status", "code_estado_ticket"))
 
-# Filtrar datos por tickets válidos
-datos <- datos %>% filter(id_ticket %in% id_ticket_validos)
-
-# 1. ACTUALIZAR REGISTROS ABIERTOS EXISTENTES
+# 1. ACTUALIZAR REGISTROS ABIERTOS
 # ----------------------------------------------------------
-# Obtener registros abiertos de la base de datos
 open_records <- dbGetQuery(conn, 
-                           "SELECT id_ticket, time_start_status 
+                           "SELECT id_ticket, time_start_status, code_estado_ticket 
    FROM hist_status_tickets 
    WHERE time_end_status = '9999-12-30 00:00:00' 
-     AND estado_ticket != 'Cerrado'")
+     AND estado_ticket != 'Cerrado'") %>%
+  mutate(
+    id_ticket = as.character(id_ticket),
+    code_estado_ticket = as.character(code_estado_ticket)  # Convertir a character
+  )
 
-# Convertir id_ticket a character en open_records
-open_records <- open_records %>%
-  mutate(id_ticket = as.character(id_ticket))
-
-if (nrow(open_records) > 0) {
-  # Encontrar coincidencias en los datos nuevos
+if(nrow(open_records) > 0 && nrow(datos) > 0){
   actualizaciones <- datos %>%
-    inner_join(open_records, by = c("id_ticket", "time_start_status"))
+    inner_join(open_records, by = c("id_ticket", "time_start_status", "code_estado_ticket"))
   
-  if (nrow(actualizaciones) > 0) {
-    # Actualizar registros en la base de datos
-    for (i in 1:nrow(actualizaciones)) {
+  if(nrow(actualizaciones) > 0){
+    for(i in 1:nrow(actualizaciones)){
       registro <- actualizaciones[i, ]
       
       dbExecute(conn, 
                 "UPDATE hist_status_tickets SET 
-          fecha_creado = ?,
-          agente_servicio = ?,
-          prioridad = ?,
           time_end_status = ?,
-          code_estado_ticket = ?,
-          estado_ticket = ?,
-          siguiente_accion_para = ?,
-          seg_duracion = ?
-        WHERE id_ticket = ? AND time_start_status = ?",
+          seg_duracion = ?,
+          agente_servicio = ?
+         WHERE id_ticket = ? 
+           AND time_start_status = ? 
+           AND code_estado_ticket = ? 
+           AND estado_ticket != 'Cerrado' 
+           AND time_end_status = '9999-12-30 00:00:00'",
                 params = list(
-                  registro$fecha_creado,
-                  registro$agente_servicio,
-                  registro$prioridad,
                   registro$time_end_status,
-                  registro$code_estado_ticket,
-                  registro$estado_ticket,
-                  registro$siguiente_accion_para,
                   registro$seg_duracion,
+                  registro$agente_servicio,
                   registro$id_ticket,
-                  registro$time_start_status
+                  registro$time_start_status,
+                  registro$code_estado_ticket
                 )
       )
     }
-    print(paste("Actualizados", nrow(actualizaciones), "registros existentes"))
+    print(paste("Actualizados", nrow(actualizaciones), "registros abiertos"))
   }
 }
 
 # 2. INSERTAR NUEVOS REGISTROS
 # ----------------------------------------------------------
-# Filtrar datos nuevos posteriores a la última fecha registrada
 nuevos_registros <- datos %>%
-  filter(as.Date(fecha_creado) > as.Date(max_fecha_db))
+  anti_join(existentes, by = c("id_ticket", "time_start_status", "code_estado_ticket"))
 
-if (nrow(nuevos_registros) > 0) {
-  # Insertar nuevos registros
-  dbWriteTable(conn, "hist_status_tickets", nuevos_registros, 
+if(nrow(nuevos_registros) > 0){
+  # Insertar solo campos relevantes para histórico
+  dbWriteTable(conn, "hist_status_tickets", 
+               nuevos_registros %>%
+                 select(id_ticket, fecha_creado, agente_servicio, prioridad,
+                        time_start_status, time_end_status, code_estado_ticket,
+                        estado_ticket, siguiente_accion_para, seg_duracion),
                append = TRUE, row.names = FALSE)
   print(paste("Insertados", nrow(nuevos_registros), "nuevos registros"))
 } else {
