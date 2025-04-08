@@ -13,119 +13,7 @@ conn <- dbConnect(RSQLite::SQLite(), db_path)
 
 # 2. Definir la consulta SQL que deseas ejecutar
 query <- "
-WITH RECURSIVE dates AS (
-    SELECT DATE('2025-01-01') AS fecha
-    UNION ALL
-    SELECT DATE(fecha, '+1 day')
-    FROM dates
-    WHERE fecha < DATE('2025-01-31')
-),
 
-down_positions AS (
-    SELECT hist_posiciones.id_posicion
-    FROM hist_posiciones
-    WHERE (hist_posiciones.status = 'I' AND DATE(hist_posiciones.fecha_inicio) <= '2025-01-31')
-),
-
-daily_comparison AS (
-    SELECT 
-        d.fecha,
-        yesterday.id_posicion AS yesterday_id_posicion,
-        yesterday.id_colaborador AS yesterday_id_colaborador,
-        yesterday.status AS yesterday_status,
-        today.id_posicion AS today_id_posicion,
-        today.id_colaborador AS today_id_colaborador,
-        today.status AS today_status,
-        today.area_de_cobranza,
-        today.nivel_gestion,
-        today.vacante
-    FROM dates d
-    LEFT JOIN hist_posiciones yesterday 
-        ON DATE(yesterday.fecha_daily) = DATE(d.fecha, '-1 day')
-        AND yesterday.id_posicion NOT IN (SELECT id_posicion FROM down_positions)
-    LEFT JOIN hist_posiciones today 
-        ON DATE(today.fecha_daily) = d.fecha
-        AND today.id_posicion NOT IN (SELECT id_posicion FROM down_positions)
-),
-
-inactivations AS (
-    SELECT 
-        fecha,
-        today_id_posicion AS id_posicion
-    FROM daily_comparison
-    WHERE today_status = 'I'
-        AND yesterday_status = 'A'
-),
-
-news AS (
-    SELECT 
-        fecha,
-        today_id_posicion AS id_posicion
-    FROM daily_comparison
-    WHERE today_id_posicion NOT IN (SELECT yesterday_id_posicion FROM daily_comparison WHERE fecha = daily_comparison.fecha)
-        AND today_status = 'A'
-),
-
-transfers AS (
-    SELECT 
-        fecha,
-        today_id_posicion AS id_posicion,
-        today_id_colaborador,
-        yesterday_id_colaborador
-    FROM daily_comparison
-    WHERE today_status = 'A'
-        AND (today_id_colaborador IS NOT NULL AND yesterday_id_colaborador IS NOT NULL)
-        AND today_id_colaborador <> yesterday_id_colaborador
-),
-
-termination AS (
-    SELECT 
-        fecha,
-        today_id_posicion AS id_posicion,
-        today_id_colaborador,
-        yesterday_id_colaborador
-    FROM daily_comparison
-    WHERE today_status = 'A'
-        AND (today_id_colaborador IS NULL AND yesterday_id_colaborador IS NOT NULL)
-),
-
-hires AS (
-    SELECT 
-        fecha,
-        today_id_posicion AS id_posicion,
-        today_id_colaborador,
-        yesterday_id_colaborador
-    FROM daily_comparison
-    WHERE today_status = 'A'
-        AND (today_id_colaborador IS NOT NULL AND yesterday_id_colaborador IS NULL)
-),
-
-status AS (
-    SELECT
-        dc.fecha,
-        dc.today_id_posicion AS id_posicion,
-        dc.today_id_colaborador,
-        CASE WHEN dc.area_de_cobranza = 'Cobranza administrativa' THEN 'COBRANZA'
-            WHEN dc.area_de_cobranza = 'Cobranza en campo' THEN 'COBRANZA'
-            ELSE dc.nivel_gestion END AS nivel_gestion,
-        CASE WHEN dc.today_id_posicion IN (SELECT id_posicion FROM inactivations WHERE fecha = dc.fecha) THEN 'Posicion Inactivada'
-            WHEN dc.today_id_posicion IN (SELECT id_posicion FROM news WHERE fecha = dc.fecha) THEN 'Posicion Creada'
-            WHEN dc.today_id_posicion IN (SELECT id_posicion FROM termination WHERE fecha = dc.fecha) THEN 'Posicion Vacante'
-            WHEN dc.today_id_posicion IN (SELECT id_posicion FROM hires WHERE fecha = dc.fecha) THEN 'Posicion Cubierta'
-            WHEN dc.today_status = 'I' THEN 'Sin Cambios - Posiciones Inactivas'
-            WHEN dc.vacante = 'True' THEN 'Sin Cambios - Posicion Activa Vacante'   
-            ELSE 'Sin Cambios - Posicion Activa Ocupada' END AS Cambios
-    FROM daily_comparison dc
-)
-
-SELECT
-    s.fecha,
-    s.nivel_gestion,
-    s.Cambios,
-    COUNT(s.id_posicion) AS Total_Posiciones
-FROM status s
-GROUP BY s.fecha, s.nivel_gestion, s.Cambios
-ORDER BY s.fecha, s.nivel_gestion, s.Cambios;
 "
 
 # 3. Ejecutar la consulta y obtener los resultados
@@ -151,109 +39,231 @@ cat("Los resultados se han guardado en:", output_path, "\n")
 ########################################################################
 
 
-# Cargar las librerías necesarias
-library(readxl)
-library(dplyr)
-library(DBI)
-library(RSQLite)
-library(lubridate)
 
-# Definir la ruta del archivo de Excel
-ruta_archivo <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/CPM_10_Historico_Estados.xlsx"
 
-# Leer el archivo de Excel, omitiendo las primeras 10 filas
-datos <- read_excel(ruta_archivo, range = cell_rows(11:100000), col_names = FALSE)
-
-# Asignar nombres a las columnas seleccionadas (columnas 1, 3, 7, 9-15)
-nombres_columnas <- c("id_ticket", "fecha_creado", "agente_servicio", "prioridad", 
-                      "time_start_status", "time_end_status", "code_estado_ticket", 
-                      "estado_ticket", "siguiente_accion_para", "seg_duracion")
-
-# Seleccionar y renombrar columnas
-datos <- datos %>%
-  select(c(1, 3, 7, 9, 10, 11, 12, 13, 14, 15)) %>%
-  setNames(nombres_columnas)
-
-# Eliminar saltos de línea en todas las columnas
-datos <- datos %>%
-  mutate(across(everything(), ~ gsub("[\r\n]", "", .)))
-
-# Convertir formatos de fecha y hora
-datos <- datos %>%
-  mutate(
-    fecha_creado = format(as.Date(fecha_creado, format = "%m/%d/%Y"), "%Y-%m-%d"),
-    time_start_status = format(as.POSIXct(time_start_status, 
-                                          format = "%m/%d/%Y %H:%M:%S", tz = "UTC"),
-                               "%Y-%m-%d %H:%M:%S"),
-    time_end_status = format(as.POSIXct(time_end_status,
-                                        format = "%m/%d/%Y %H:%M:%S", tz = "UTC"),
-                             "%Y-%m-%d %H:%M:%S"),
-    id_ticket = as.character(id_ticket)  # Convertir id_ticket a character
-  )
-
-# Conectar a la base de datos SQLite
-db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
-conn <- dbConnect(SQLite(), db_path)
-
-# 1. ACTUALIZAR REGISTROS ABIERTOS EXISTENTES
-# ----------------------------------------------------------
-# Obtener registros abiertos de la base de datos
-open_records <- dbGetQuery(conn, 
-                           "SELECT id_ticket, time_start_status 
-   FROM hist_status_tickets 
-   WHERE time_end_status = '9999-12-30 00:00:00' 
-     AND estado_ticket != 'Cerrado'")
-
-# Convertir id_ticket a character en open_records
-open_records <- open_records %>%
-  mutate(id_ticket = as.character(id_ticket))
-
-if (nrow(open_records) > 0) {
-  # Encontrar coincidencias en los datos nuevos
-  actualizaciones <- datos %>%
-    inner_join(open_records, by = c("id_ticket", "time_start_status"))
+  # ---------------------------
+  # CONFIGURACIÓN INICIAL (R)
+  # ---------------------------
+  library(reticulate)
+  library(dplyr) 
+  library(readxl)
+  library(lubridate)
+  use_condaenv("base")  # Asegurar que usas el entorno base
   
-  if (nrow(actualizaciones) > 0) {
-    # Actualizar registros en la base de datos
-    for (i in 1:nrow(actualizaciones)) {
-      registro <- actualizaciones[i, ]
-      
-      dbExecute(conn, 
-                "UPDATE hist_status_tickets SET 
-          fecha_creado = ?,
-          agente_servicio = ?,
-          prioridad = ?,
-          time_end_status = ?,
-          code_estado_ticket = ?,
-          estado_ticket = ?,
-          siguiente_accion_para = ?,
-          seg_duracion = ?
-        WHERE id_ticket = ? AND time_start_status = ?",
-                params = list(
-                  registro$fecha_creado,
-                  registro$agente_servicio,
-                  registro$prioridad,
-                  registro$time_end_status,
-                  registro$code_estado_ticket,
-                  registro$estado_ticket,
-                  registro$siguiente_accion_para,
-                  registro$seg_duracion,
-                  registro$id_ticket,
-                  registro$time_start_status
-                )
+  # Instalar paquetes de Python (si no están instalados)
+  #py_install(c("pandas", "numpy", "scikit-learn", "xgboost", "matplotlib", "seaborn", "shap"))
+  
+  # Cargar bibliotecas de Python
+  pd <- import("pandas")
+  np <- import("numpy")
+  sklearn <- import("sklearn.ensemble")
+  xgb <- import("xgboost")
+  plt <- import("matplotlib.pyplot")
+  sns <- import("seaborn")
+  shap <- import("shap")
+  
+  # Definir el modelo
+  modelo_rf <- sklearn$RandomForestClassifier(
+    n_estimators = 200L,     # Entero
+    max_depth = 5L,          # Entero
+    class_weight = "balanced",
+    random_state = 123L      # Entero
+  )
+  
+  # ---------------------------
+  # CARGAR DATOS DESDE EXCEL
+  # ---------------------------
+  data <- read_excel("C:/Users/racl26345/Documents/Modelos Predictivos/Listado Colaboradores Incorporados 2022 a 2024.xlsx")
+  
+  # ---------------------------
+  # PREPARACIÓN DE DATOS (R)
+  # ---------------------------
+  # Filtrar datos para SUCURSAL y PLAZA
+  data_filtrado <- data %>% 
+    filter(Alta_nivel_gestion %in% c("SUCURSAL", "PLAZA")) %>%
+    mutate(
+      Fecha_Contratación = as_date(Fecha_Contratación),  # Convertir a fecha
+      Baja_fecha = as_date(Baja_fecha)
+    )
+  
+  # Crear variable objetivo: Supervivencia a 6 meses
+  data_filtrado <- data_filtrado %>%
+    mutate(
+      Supervivencia_6_meses = ifelse(
+        is.na(Baja_fecha) | Baja_fecha > Fecha_Contratación %m+% months(6), 
+        1, 
+        0
       )
-    }
-    print(paste("Actualizados", nrow(actualizaciones), "registros existentes"))
+    )
+  
+  # Calcular edades (ejemplo)
+  data_filtrado <- data_filtrado %>%
+    mutate(
+      Edad_Contratación = as.numeric(difftime(Fecha_Contratación, Alta_fecha_nacimiento, units = "days") / 365.25)
+    )
+  
+  # Seleccionar variables para el modelo (¡personaliza según tus columnas!)
+  data_modelo <- data_filtrado %>%
+    select(
+      # Variables demográficas
+      Alta_genero, 
+      Alta_estado_civil, 
+      Edad_Contratación,
+      
+      # Variables laborales
+      Alta_Media_Salario, 
+      Alta_area_cobranza,
+      
+      # Variable objetivo
+      Supervivencia_6_meses
+    )
+  
+  # Convertir variables categóricas a factores
+  data_modelo <- data_modelo %>%
+    mutate(across(where(is.character), as.factor))
+  
+  # Eliminar filas con NA
+  data_modelo <- na.omit(data_modelo)
+  
+  # ---------------------------
+  # PASAR DATOS A PYTHON
+  # ---------------------------
+  # Convertir a DataFrame de Python
+  data_py <- r_to_py(data_modelo)
+  
+  # Codificar variables categóricas (one-hot encoding)
+  X <- pd$get_dummies(data_py$drop("Supervivencia_6_meses", axis = 1))
+  y <- data_py["Supervivencia_6_meses"]
+  
+  # Convertir y a array de numpy (evita errores de formato)
+  y <- np$array(y$values) %>% np$ravel()  # Asegurar que es 1D
+  
+  # Dividir en entrenamiento y prueba (usar 123L para forzar tipo entero)
+  split_result <- sklearn$model_selection$train_test_split(
+    X, 
+    y, 
+    test_size = 0.3, 
+    random_state = 123L,  # ¡Usar L para indicar entero en R!
+    stratify = y
+  )
+  
+  # Extraer componentes
+  X_train <- split_result[[1]]
+  X_test <- split_result[[2]]
+  y_train <- split_result[[3]]
+  y_test <- split_result[[4]]
+  
+  # ---------------------------
+  # MODELO 1: RANDOM FOREST
+  # ---------------------------
+  # Entrenar modelo
+  modelo_rf$fit(X_train, y_train)
+  
+  # Predecir probabilidades
+  probas <- modelo_rf$predict_proba(X_test)
+  
+  # Manejar casos con una sola clase
+  if (ncol(probas) == 1) {
+    y_proba_rf <- probas[, 1]
+  } else {
+    y_proba_rf <- probas[, 2]
   }
-}
-
-# 2. INSERTAR NUEVOS REGISTROS
-# ----------------------------------------------------------
-# Insertar todos los registros sin filtrar por fecha
-dbWriteTable(conn, "hist_status_tickets", datos, 
-             append = TRUE, row.names = FALSE)
-print(paste("Insertados", nrow(datos), "nuevos registros"))
-
-# Cerrar conexión
-dbDisconnect(conn)
-print("Proceso completado exitosamente")
+  
+  # Calcular métricas
+  library(caret)
+  confusionMatrix(factor(y_pred_rf), factor(y_test))
+  
+  # Importancia de variables
+  importancia_rf <- data.frame(
+    Variable = colnames(X_train),
+    Importancia = modelo_rf$feature_importances_
+  ) %>% arrange(desc(Importancia))
+  
+  # ---------------------------
+  # MODELO 2: XGBOOST
+  # ---------------------------
+  cat("\n[2/2] Entrenando XGBoost...\n")
+  
+  # Configurar modelo
+  modelo_xgb <- xgb$XGBClassifier(
+    objective = "binary:logistic",
+    n_estimators = 150,
+    max_depth = 4,
+    learning_rate = 0.1,
+    subsample = 0.8,
+    scale_pos_weight = sum(y_train == 0) / sum(y_train == 1),  # Balancear clases
+    random_state = 123
+  )
+  
+  # Entrenar y predecir
+  modelo_xgb$fit(X_train, y_train$values$ravel())
+  y_pred_xgb <- modelo_xgb$predict(X_test)
+  y_proba_xgb <- modelo_xgb$predict_proba(X_test)[, 2]
+  
+  # Métricas de evaluación
+  cat("\nResultados XGBoost:\n")
+  print(sklearn$metrics$classification_report(y_test, y_pred_xgb))
+  cat("AUC-ROC:", sklearn$metrics$roc_auc_score(y_test, y_proba_xgb), "\n")
+  
+  # Importancia de variables
+  importancia_xgb <- xgb$plot_importance(modelo_xgb)
+  
+  # ---------------------------
+  # VISUALIZACIÓN
+  # ---------------------------
+  # Configurar estilo de gráficos
+  plt$style$use("seaborn")
+  sns$set_palette("viridis")
+  
+  # Gráfico de importancia (Random Forest)
+  plt$figure(figsize = c(12, 8))
+  sns$barplot(
+    x = "Importancia", 
+    y = "Variable", 
+    data = importancia_rf[1:15, ]  # Top 15 variables
+  )
+  plt$title("Importancia de Variables - Random Forest (Top 15)")
+  plt$savefig("importancia_rf.png", dpi = 300, bbox_inches = "tight")
+  plt$close()
+  
+  # Gráfico de importancia (XGBoost)
+  plt$figure(figsize = c(12, 8))
+  xgb$plot_importance(modelo_xgb, max_num_features = 15)
+  plt$title("Importancia de Variables - XGBoost (Top 15)")
+  plt$savefig("importancia_xgb.png", dpi = 300, bbox_inches = "tight")
+  plt$close()
+  
+  # ---------------------------
+  # INTERPRETABILIDAD (SHAP)
+  # ---------------------------
+  # Calcular valores SHAP (solo para XGBoost)
+  cat("\nCalculando valores SHAP...\n")
+  explainer <- shap$TreeExplainer(modelo_xgb)
+  shap_values <- explainer$shap_values(X_train)
+  
+  # Gráfico de resumen SHAP
+  plt$figure(figsize = c(12, 8))
+  shap$summary_plot(shap_values, X_train, plot_type = "dot", max_display = 15)
+  plt$title("Impacto de Variables en Predicciones (SHAP)")
+  plt$savefig("shap_summary.png", dpi = 300, bbox_inches = "tight")
+  plt$close()
+  
+  # ---------------------------
+  # COMPARACIÓN FINAL
+  # ---------------------------
+  cat("\n[COMPARACIÓN FINAL]\n")
+  
+  # Crear dataframe comparativo
+  comparacion <- data.frame(
+    Modelo = c("Random Forest", "XGBoost"),
+    Accuracy = c(
+      sklearn$metrics$accuracy_score(y_test, y_pred_rf),
+      sklearn$metrics$accuracy_score(y_test, y_pred_xgb)
+    ),
+    AUC_ROC = c(
+      sklearn$metrics$roc_auc_score(y_test, y_proba_rf),
+      sklearn$metrics$roc_auc_score(y_test, y_proba_xgb)
+    )
+  )
+  
+  print(comparacion)

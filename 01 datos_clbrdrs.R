@@ -35,7 +35,10 @@ columnas_db <- c("id_colaborador", "nombre_completo", "puesto", "id_centro_costo
                  "regional_hr", "status_colaborador", "fecha_entrada_puesto", "fecha_baja", 
                  "fecha_ultimo_dia_laborado", "causa_baja", "motivo_baja", "fecha_nacimiento", 
                  "estado_civil", "genero", "area_personal", "area_cobranza", "tipo_reclutamiento", 
-                 "tipo_contrato", "uniforme", "nivel_gestion", "horario")
+                 "tipo_contrato", "uniforme", "nivel_gestion", "horario", "clasificacion_riesgo","clasificacion_liderazgo",
+                 "escolaridad_deseada","experiencia_deseada","modalidad_puesto","perfil_profesional","puesto_generico",
+                 "segmento_puesto","sgmm","software_avanzado","software_basico","software_intermedio","status_posicion",
+                 "tabulador_salarial","tiempo_experiencia")
 
 # Renombrar las columnas de los datos para que coincidan con la tabla de SQLite
 colnames(datos) <- columnas_db

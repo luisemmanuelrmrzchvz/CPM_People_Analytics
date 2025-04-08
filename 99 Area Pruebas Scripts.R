@@ -108,172 +108,227 @@ cat("✅ El archivo ha sido guardado en:", output_path, "\n")
 
 
 
+# INSTALACIÓN (solo primera vez)
+# install.packages(c("reticulate", "readxl", "openxlsx", "dplyr", "tidyr"))
 library(reticulate)
+library(readxl)
+library(openxlsx)
+library(dplyr)
+library(tidyr)
 
-# Importar las bibliotecas de Python
-pd <- import("pandas")
-sqlite3 <- import("sqlite3")
-pytz <- import("pytz")
+# Configurar entorno Anaconda
+use_condaenv("base", required = TRUE)
 
-# ------------------------------------------------------------------------------
-# Funciones en Python para el cálculo (CON ZONAS HORARIAS)
-# ------------------------------------------------------------------------------
+# ---- PARTE EN PYTHON ----
 py_run_string("
-import pytz
-from datetime import datetime, timedelta
 import pandas as pd
+import numpy as np
+from geopy.geocoders import Nominatim
+from geopy.extra.rate_limiter import RateLimiter
+from geopy.distance import geodesic
+import time
+import os
 
-def calculate_effective_seconds(start_utc, end_utc):
-    # Convertir UTC a CST (Ciudad de México)
-    utc_zone = pytz.utc
-    cst_zone = pytz.timezone('America/Mexico_City')
-    
-    start = start_utc.astimezone(cst_zone) if start_utc.tzinfo else utc_zone.localize(start_utc).astimezone(cst_zone)
-    end = end_utc.astimezone(cst_zone) if end_utc.tzinfo else utc_zone.localize(end_utc).astimezone(cst_zone)
-
-    if end == start:
-        return 0
-    if pd.isna(start) or pd.isna(end) or start >= end:
-        return 0
-
-    total_seconds = 0
-    current_date = start.date()
-    end_date = end.date()
-
-    while current_date <= end_date:
-        day_of_week = current_date.weekday()
-
-        # Definir ventanas de servicio en CST
-        if day_of_week in range(5):  # Lunes a viernes (0-4)
-            servicio_start = cst_zone.localize(datetime.combine(current_date, datetime.strptime('09:00:00', '%H:%M:%S').time()))
-            servicio_end = cst_zone.localize(datetime.combine(current_date, datetime.strptime('18:00:00', '%H:%M:%S').time()))
-        elif day_of_week == 5:  # Sábado (5)
-            servicio_start = cst_zone.localize(datetime.combine(current_date, datetime.strptime('09:00:00', '%H:%M:%S').time()))
-            servicio_end = cst_zone.localize(datetime.combine(current_date, datetime.strptime('14:00:00', '%H:%M:%S').time()))
-        else:  # Domingo (6)
-            current_date += timedelta(days=1)
-            continue
-
-        # Asegurar que los intervalos están en CST
-        interval_start = max(start, servicio_start)
-        interval_end = min(end, servicio_end)
-
-        if interval_start < interval_end:
-            total_seconds += (interval_end - interval_start).total_seconds()
-
-        current_date += timedelta(days=1)
-
-    return total_seconds
-
-def calculate_row_seconds(row):
+# Configuración mejorada de geocodificación
+def configurar_geocodificador():
     try:
-        if row['code_estado_ticket'] != '6':
-            return calculate_effective_seconds(row['time_start_status'], row['time_end_status_parsed'])
-        else:
-            return 0
+        geolocator = Nominatim(
+            user_agent='codigos_postales_mexico',
+            domain='nominatim.openstreetmap.org',
+            timeout=10
+        )
+        return RateLimiter(geolocator.geocode, min_delay_seconds=1)
     except Exception as e:
-        print(f'Error en fila {row.name}: {str(e)}')
-        return 0
+        print(f'Error configurando geocodificador: {str(e)}')
+        return None
+
+geocode = configurar_geocodificador()
+
+# Función mejorada para obtener coordenadas
+def obtener_coordenadas(cp, intentos=3):
+    if geocode is None:
+        return (np.nan, np.nan)
+        
+    for i in range(intentos):
+        try:
+            # Búsqueda optimizada para códigos postales mexicanos
+            location = geocode(query=f'{cp}, Mexico', addressdetails=True, country_codes='mx')
+            if location:
+                return (location.latitude, location.longitude)
+        except Exception as e:
+            print(f'Intento {i+1} fallido para CP {cp}: {str(e)}')
+            time.sleep(2)
+    return (np.nan, np.nan)
+
+# Función para calcular distancia con cache en disco
+def calcular_distancia(cp1, cp2, cache_file='cp_cache.csv'):
+    try:
+        # Cargar cache existente o crear nuevo
+        if os.path.exists(cache_file):
+            datos_cp = pd.read_csv(cache_file)
+        else:
+            datos_cp = pd.DataFrame(columns=['CP', 'Latitud', 'Longitud'])
+        
+        # Buscar o obtener coordenadas para cp1
+        if cp1 in datos_cp['CP'].values:
+            lat1, lon1 = datos_cp.loc[datos_cp['CP'] == cp1, ['Latitud', 'Longitud']].values[0]
+        else:
+            print(f'Buscando coordenadas para CP: {cp1}')
+            lat1, lon1 = obtener_coordenadas(cp1)
+            nuevos_datos = pd.DataFrame({'CP': [cp1], 'Latitud': [lat1], 'Longitud': [lon1]})
+            datos_cp = pd.concat([datos_cp, nuevos_datos], ignore_index=True)
+            datos_cp.to_csv(cache_file, index=False)
+        
+        # Buscar o obtener coordenadas para cp2
+        if cp2 in datos_cp['CP'].values:
+            lat2, lon2 = datos_cp.loc[datos_cp['CP'] == cp2, ['Latitud', 'Longitud']].values[0]
+        else:
+            print(f'Buscando coordenadas para CP: {cp2}')
+            lat2, lon2 = obtener_coordenadas(cp2)
+            nuevos_datos = pd.DataFrame({'CP': [cp2], 'Latitud': [lat2], 'Longitud': [lon2]})
+            datos_cp = pd.concat([datos_cp, nuevos_datos], ignore_index=True)
+            datos_cp.to_csv(cache_file, index=False)
+        
+        # Calcular distancia
+        if np.isnan(lat1) or np.isnan(lat2):
+            return {
+                'cp1': cp1,
+                'cp2': cp2,
+                'lat1': lat1,
+                'lon1': lon1,
+                'lat2': lat2,
+                'lon2': lon2,
+                'distancia_km': np.nan,
+                'error': 'Coordenadas no encontradas'
+            }
+            
+        distancia = geodesic((lat1, lon1), (lat2, lon2)).kilometers
+        return {
+            'cp1': cp1,
+            'cp2': cp2,
+            'lat1': lat1,
+            'lon1': lon1,
+            'lat2': lat2,
+            'lon2': lon2,
+            'distancia_km': round(distancia, 2),
+            'error': None
+        }
+        
+    except Exception as e:
+        print(f'Error procesando {cp1}-{cp2}: {str(e)}')
+        return {
+            'cp1': cp1,
+            'cp2': cp2,
+            'lat1': np.nan,
+            'lon1': np.nan,
+            'lat2': np.nan,
+            'lon2': np.nan,
+            'distancia_km': np.nan,
+            'error': str(e)
+        }
 ")
 
-# ------------------------------------------------------------------------------
-# Conectar a la base de datos y procesar (CONVERSIÓN UTC -> CST)
-# ------------------------------------------------------------------------------
-py_run_string("
-import sqlite3
-import pandas as pd
-import pytz
-from datetime import datetime, timedelta
+# ---- PARTE EN R ----
+# Función para seleccionar archivo interactivamente
+seleccionar_archivo <- function() {
+  ruta <- file.choose()
+  if (length(ruta) == 0) {
+    stop("No se seleccionó ningún archivo")
+  }
+  return(ruta)
+}
 
-# Conectar a la base de datos
-conn = sqlite3.connect('C:/Users/racl26345/Documents/DataBases/people_analytics.db')
+# Función mejorada para procesar el archivo
+procesar_distancias <- function(ruta_entrada = NULL) {
+  # Seleccionar archivo si no se proporciona ruta
+  if (is.null(ruta_entrada)) {
+    cat("Por favor selecciona tu archivo Excel con los códigos postales\n")
+    ruta_entrada <- seleccionar_archivo()
+  }
+  
+  # Leer archivo Excel
+  datos <- tryCatch({
+    read_excel(ruta_entrada) %>%
+      mutate(across(c(cp_1, cp_2), as.character))
+  }, error = function(e) {
+    stop(paste("Error leyendo el archivo:", e$message))
+  })
+  
+  # Verificar columnas
+  if (!all(c("cp_1", "cp_2") %in% colnames(datos))) {
+    stop("El archivo debe contener columnas 'cp_1' y 'cp_2'")
+  }
+  
+  cat("\nCalculando distancias...\n")
+  
+  # Calcular distancias para cada par
+  resultados <- list()
+  for (i in 1:nrow(datos)) {
+    cp1 <- datos$cp_1[i]
+    cp2 <- datos$cp_2[i]
+    
+    cat(sprintf("Procesando par %d de %d: %s - %s\n", i, nrow(datos), cp1, cp2))
+    
+    # Llamar a la función Python
+    resultado <- py$calcular_distancia(cp1, cp2)
+    
+    # Convertir a dataframe
+    resultados[[i]] <- as.data.frame(resultado)
+    
+    # Pequeña pausa para evitar saturación
+    if (i %% 5 == 0) Sys.sleep(1)
+  }
+  
+  # Combinar todos los resultados
+  resultados_final <- bind_rows(resultados)
+  
+  return(resultados_final)
+}
 
-# Consulta SQL
-query = '''
-    SELECT 
-        id_key, id_ticket, fecha_creado, agente_servicio, prioridad,
-        time_start_status, 
-        CASE 
-            WHEN code_estado_ticket = 6 THEN time_start_status 
-            ELSE time_end_status 
-        END AS time_end_status,
-        CAST(code_estado_ticket AS TEXT) AS code_estado_ticket,
-        estado_ticket, siguiente_accion_para,
-        seg_duracion
-    FROM hist_status_tickets
-    WHERE id_key NOT IN (SELECT id_key FROM hist_status_tickets_sw);
-'''
+# Función para guardar resultados
+guardar_resultados <- function(resultados, ruta_salida = NULL) {
+  if (is.null(ruta_salida)) {
+    ruta_salida <- file.path(dirname(seleccionar_archivo()), "resultados_distancias.xlsx")
+  }
+  
+  # Crear lista de hojas
+  hojas <- list(
+    "Distancias" = resultados,
+    "Coordenadas" = bind_rows(
+      resultados %>%
+        select(CP = cp1, Latitud = lat1, Longitud = lon1) %>%
+        distinct(),
+      resultados %>%
+        select(CP = cp2, Latitud = lat2, Longitud = lon2) %>%
+        distinct()
+    ) %>%
+      distinct(CP, .keep_all = TRUE)
+  )
+  
+  # Guardar archivo Excel
+  write.xlsx(hojas, file = ruta_salida)
+  
+  return(ruta_salida)
+}
 
-# Leer datos en DataFrame
-nuevos_registros = pd.read_sql_query(query, conn)
+# Ejecución principal
+main <- function() {
+  tryCatch({
+    # Procesar archivo
+    resultados <- procesar_distancias()
+    
+    # Mostrar resumen
+    cat("\nResultados obtenidos:\n")
+    print(resultados %>% select(cp1, cp2, distancia_km))
+    
+    # Guardar resultados
+    ruta_guardado <- guardar_resultados(resultados)
+    cat(paste("\nResultados guardados en:", ruta_guardado, "\n"))
+    
+  }, error = function(e) {
+    cat(paste("\nError en el proceso:", e$message, "\n"))
+  })
+}
 
-# Guardar el time_end_status original como string
-nuevos_registros['original_time_end_status'] = nuevos_registros['time_end_status']
-
-# Convertir a datetime con zona horaria UTC
-nuevos_registros['time_start_status'] = pd.to_datetime(
-    nuevos_registros['time_start_status'],
-    format='%Y-%m-%d %H:%M:%S',
-    errors='coerce'
-).dt.tz_localize('UTC')
-
-# Parsear time_end_status, manteniendo los originales
-nuevos_registros['time_end_status_parsed'] = pd.to_datetime(
-    nuevos_registros['time_end_status'],
-    format='%Y-%m-%d %H:%M:%S',
-    errors='coerce'
-).dt.tz_localize('UTC')
-
-# Obtener la fecha actual en CST
-cst = pytz.timezone('America/Mexico_City')
-now_cst = datetime.now(cst)
-current_date_cst = now_cst.date()
-
-# Función para obtener dynamic_end_utc
-def get_dynamic_end_utc(current_date):
-    day_of_week = current_date.weekday()
-    if day_of_week in range(5):  # Lunes a viernes
-        end_time = datetime.strptime('18:00:00', '%H:%M:%S').time()
-        effective_date = current_date
-    elif day_of_week == 5:  # Sábado
-        end_time = datetime.strptime('14:00:00', '%H:%M:%S').time()
-        effective_date = current_date
-    else:  # Domingo
-        effective_date = current_date - timedelta(days=1)
-        end_time = datetime.strptime('14:00:00', '%H:%M:%S').time()
-
-    naive = datetime.combine(effective_date, end_time)
-    localized = cst.localize(naive)
-    return localized.astimezone(pytz.UTC)
-
-dynamic_end_utc = get_dynamic_end_utc(current_date_cst)
-
-# Reemplazar NaT en time_end_status_parsed para tickets abiertos
-mask = (nuevos_registros['code_estado_ticket'] != '6') & nuevos_registros['time_end_status_parsed'].isna()
-nuevos_registros.loc[mask, 'time_end_status_parsed'] = dynamic_end_utc
-
-# Calcular seg_duracion usando time_end_status_parsed
-nuevos_registros['seg_duracion'] = nuevos_registros.apply(calculate_row_seconds, axis=1)
-
-# Convertir a CST y eliminar zona horaria
-nuevos_registros['time_start_status'] = nuevos_registros['time_start_status'].dt.tz_convert('America/Mexico_City').dt.tz_localize(None)
-nuevos_registros['time_end_status_parsed'] = nuevos_registros['time_end_status_parsed'].dt.tz_convert('America/Mexico_City').dt.tz_localize(None)
-
-# Restaurar original_time_end_status para tickets abiertos
-nuevos_registros['time_end_status'] = nuevos_registros.apply(
-    lambda row: row['original_time_end_status'] if (row['code_estado_ticket'] != '6' and pd.isna(pd.to_datetime(row['original_time_end_status'], errors='coerce'))) else row['time_end_status_parsed'].strftime('%Y-%m-%d %H:%M:%S'),
-    axis=1
-)
-
-# Eliminar columnas temporales
-nuevos_registros = nuevos_registros.drop(columns=['time_end_status_parsed', 'original_time_end_status'])
-
-# Guardar resultados en la tabla espejo
-nuevos_registros.to_sql('hist_status_tickets_sw', conn, if_exists='append', index=False)
-
-# Cerrar conexión
-conn.close()
-")
-
-# Mensaje de finalización
-cat("¡Proceso completado con conversión UTC -> CST a las", format(Sys.time(), "%H:%M:%S"), "\n")
+# Ejecutar
+main()
