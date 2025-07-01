@@ -591,18 +591,69 @@ tiempos_nivel_area <- datos_analysis %>%
   group_by(nivel_gestion_cliente, area_personal_cliente) %>%
   summarise(
     tiempo_procesador_promedio = mean(total_tiempo_procesador / 3600, na.rm = TRUE),
-    tiempo_cliente_promedio = mean(total_tiempo_cliente / 3600, na.rm = TRUE)
+    tiempo_cliente_promedio = mean(total_tiempo_cliente / 3600, na.rm = TRUE),
+    n_tickets = n(),  # Agregamos el conteo de tickets
+    .groups = "drop"
   ) %>%
-  pivot_longer(cols = starts_with("tiempo_"), names_to = "tipo_tiempo", values_to = "horas_promedio")
+  pivot_longer(
+    cols = c(tiempo_procesador_promedio, tiempo_cliente_promedio),
+    names_to = "tipo_tiempo",
+    values_to = "horas_promedio"
+  )
 
+# Calcula el máximo valor de horas_promedio con un 10% de margen
+max_horas <- max(tiempos_nivel_area$horas_promedio, na.rm = TRUE) * 1.1
+
+# Crear el gráfico mejorado
 grafico_nivel_area <- ggplot(tiempos_nivel_area, aes(x = nivel_gestion_cliente, y = horas_promedio, fill = tipo_tiempo)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  facet_wrap(~area_personal_cliente, scales = "free") +
-  labs(title = "Comparativo de Tiempos por Nivel de Gestión y Área de Personal",
-       x = "Nivel de Gestión", y = "Horas Promedio", fill = "Tipo de Tiempo") +
-  scale_fill_manual(values = c("#1f77b4", "#ff7f0e")) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9), width = 0.8) +
+  
+  # Texto dentro de las barras (valores de tiempo)
+  geom_text(
+    aes(label = sprintf("%.1f h", horas_promedio)),
+    position = position_dodge(width = 0.9),
+    angle = 90,
+    hjust = 1.1,
+    vjust = 0.5,
+    size = 4.5,
+    color = "black"
+  ) +
+  
+  # Texto encima de las barras (número de tickets)
+  geom_text(
+    aes(
+      y = max_horas * 0.95,  # Posición cerca del tope del gráfico
+      label = paste("n =", n_tickets),
+      group = nivel_gestion_cliente  # Agrupar por nivel de gestión
+    ),
+    position = position_dodge(width = 0.9),
+    size = 3.5,
+    color = "black",
+    vjust = -0.5
+  ) +
+  
+  facet_wrap(~area_personal_cliente, scales = "fixed") +
+  labs(
+    title = "Comparativo de Tiempos por Nivel de Gestión y Área de Personal",
+    subtitle = "Valores dentro de barras: Horas promedio | Valores superiores: Número de tickets",
+    x = "Nivel de Gestión", 
+    y = "Horas Promedio", 
+    fill = "Tipo de Tiempo"
+  ) +
+  scale_fill_manual(
+    values = c("tiempo_procesador_promedio" = "#1f77b4", "tiempo_cliente_promedio" = "#ff7f0e"),
+    labels = c("Tiempo Procesador", "Tiempo Cliente")
+  ) +
+  scale_y_continuous(limits = c(0, max_horas), expand = expansion(mult = c(0, 0.1))) +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+    legend.position = "bottom",
+    legend.text = element_text(size = 10),
+    strip.text = element_text(size = 10, face = "bold"),
+    plot.subtitle = element_text(size = 9, color = "gray40"),
+    panel.spacing = unit(1, "lines")
+  )
 
 # D.7. Tipos de Tickets y Niveles de Atención | Volúmenes
 grafico_volumen_tipo_nivel <- datos_analysis %>%
@@ -854,7 +905,7 @@ paths <- list(
   etapas = guardar_grafico(grafico_etapas, "etapas"),
   distribucion = guardar_grafico(grafico_distribucion, "distribucion"),
   nivel = guardar_grafico(grafico_nivel, "nivel", ancho = 10, alto = 6),
-  area = guardar_grafico(grafico_nivel_area, "area"),
+  area = guardar_grafico(grafico_nivel_area, "area", ancho = 10, alto = 8),
   vol_tipo = guardar_grafico(grafico_volumen_tipo_nivel, "vol_tipo", ancho = 10, alto = 6),
   time_tipo = guardar_grafico(grafico_tiempos_tipo_nivel, "time_tipo", ancho = 10, alto = 6),
   departamento = guardar_grafico(combo_departamento, "departamento", ancho = 14, alto = 14),
@@ -883,31 +934,31 @@ metricas_text_trimestre <- paste0(
   "<b>[Consultas vs Requerimientos]</b><br>",
   "• <b>Consultas:</b><br>",
   "--- Total Consultas: ", metricas_trimestre$consultas, " (", metricas_trimestre$porc_consultas, "%)<br>",
-  "▪▪▪▪ Por Resolver: ", metricas_trimestre$consultas_por_resolver, " (", metricas_trimestre$porc_consultas_por_resolver, "%)<br>",
-  "▪▪▪▪ En Espera Confirmación: ", metricas_trimestre$consultas_espera_confirmacion, " (", metricas_trimestre$porc_consultas_espera_confirmacion, "%)<br>",
-  "▪▪▪▪ Cerradas: ", metricas_trimestre$consultas_cerrados, " (", metricas_trimestre$porc_consultas_cerrados, "%)<br>",
+  "▪▪▪▪▪ Por Resolver: ", metricas_trimestre$consultas_por_resolver, " (", metricas_trimestre$porc_consultas_por_resolver, "%)<br>",
+  "▪▪▪▪▪ En Espera Confirmación: ", metricas_trimestre$consultas_espera_confirmacion, " (", metricas_trimestre$porc_consultas_espera_confirmacion, "%)<br>",
+  "▪▪▪▪▪ Cerradas: ", metricas_trimestre$consultas_cerrados, " (", metricas_trimestre$porc_consultas_cerrados, "%)<br>",
   "--- % SLA (Consultas Cerradas): ", metricas_trimestre$sla_consultas, "%<br>",
   "--- Tiempo Medio Resolución: ", metricas_trimestre$tiempo_medio_consultas, " hrs<br>",
   "• <b>Requerimientos:</b><br>",
   "--- Total Requerimientos: ", metricas_trimestre$requerimientos, " (", metricas_trimestre$porc_requerimientos, "%)<br>",
-  "▪▪▪▪ Por Resolver: ", metricas_trimestre$requerimientos_por_resolver, " (", metricas_trimestre$porc_requerimientos_por_resolver, "%)<br>",
-  "▪▪▪▪ En Espera Confirmación: ", metricas_trimestre$requerimientos_espera_confirmacion, " (", metricas_trimestre$porc_requerimientos_espera_confirmacion, "%)<br>",
-  "▪▪▪▪ Cerrados: ", metricas_trimestre$requerimientos_cerrados, " (", metricas_trimestre$porc_requerimientos_cerrados, "%)<br>",
+  "▪▪▪▪▪ Por Resolver: ", metricas_trimestre$requerimientos_por_resolver, " (", metricas_trimestre$porc_requerimientos_por_resolver, "%)<br>",
+  "▪▪▪▪▪ En Espera Confirmación: ", metricas_trimestre$requerimientos_espera_confirmacion, " (", metricas_trimestre$porc_requerimientos_espera_confirmacion, "%)<br>",
+  "▪▪▪▪▪ Cerrados: ", metricas_trimestre$requerimientos_cerrados, " (", metricas_trimestre$porc_requerimientos_cerrados, "%)<br>",
   "--- % SLA (Requerimientos Cerrados): ", metricas_trimestre$sla_requerimientos, "%<br>",
   "--- Tiempo Medio Resolución: ", metricas_trimestre$tiempo_medio_requerimientos, " hrs<br>",
   "<b>[Rhadar vs Escalamientos]</b><br>",
   "• <b>Rhadar:</b><br>",
   "--- Total Rhadar: ", metricas_trimestre$rhadar, " (", metricas_trimestre$porc_rhadar, "%)<br>",
-  "▪▪▪▪ Por Resolver: ", metricas_trimestre$rhadar_por_resolver, " (", metricas_trimestre$porc_rhadar_por_resolver, "%)<br>",
-  "▪▪▪▪ En Espera Confirmación: ", metricas_trimestre$rhadar_espera_confirmacion, " (", metricas_trimestre$porc_rhadar_espera_confirmacion, "%)<br>",
-  "▪▪▪▪ Cerrados: ", metricas_trimestre$rhadar_cerrados, " (", metricas_trimestre$porc_rhadar_cerrados, "%)<br>",
+  "▪▪▪▪▪ Por Resolver: ", metricas_trimestre$rhadar_por_resolver, " (", metricas_trimestre$porc_rhadar_por_resolver, "%)<br>",
+  "▪▪▪▪▪ En Espera Confirmación: ", metricas_trimestre$rhadar_espera_confirmacion, " (", metricas_trimestre$porc_rhadar_espera_confirmacion, "%)<br>",
+  "▪▪▪▪▪ Cerrados: ", metricas_trimestre$rhadar_cerrados, " (", metricas_trimestre$porc_rhadar_cerrados, "%)<br>",
   "--- % SLA (Rhadar Cerrados): ", metricas_trimestre$sla_rhadar, "%<br>",
   "--- Tiempo Medio Resolución: ", metricas_trimestre$tiempo_medio_rhadar, " hrs<br>",
   "• <b>Escalamientos:</b><br>",
   "--- Total Escalamientos: ", metricas_trimestre$escalamientos, " (", metricas_trimestre$porc_escalamientos, "%)<br>",
-  "▪▪▪▪ Por Resolver: ", metricas_trimestre$escalamientos_por_resolver, " (", metricas_trimestre$porc_escalamientos_por_resolver, "%)<br>",
-  "▪▪▪▪ En Espera Confirmación: ", metricas_trimestre$escalamientos_espera_confirmacion, " (", metricas_trimestre$porc_escalamientos_espera_confirmacion, "%)<br>",
-  "▪▪▪▪ Cerrados: ", metricas_trimestre$escalamientos_cerrados, " (", metricas_trimestre$porc_escalamientos_cerrados, "%)<br>",
+  "▪▪▪▪▪ Por Resolver: ", metricas_trimestre$escalamientos_por_resolver, " (", metricas_trimestre$porc_escalamientos_por_resolver, "%)<br>",
+  "▪▪▪▪▪ En Espera Confirmación: ", metricas_trimestre$escalamientos_espera_confirmacion, " (", metricas_trimestre$porc_escalamientos_espera_confirmacion, "%)<br>",
+  "▪▪▪▪▪ Cerrados: ", metricas_trimestre$escalamientos_cerrados, " (", metricas_trimestre$porc_escalamientos_cerrados, "%)<br>",
   "--- % SLA (Escalamientos Cerrados): ", metricas_trimestre$sla_escalamientos, "%<br>",
   "--- Tiempo Medio Resolución: ", metricas_trimestre$tiempo_medio_escalamientos, " hrs<br><br>"
 )
@@ -1627,18 +1678,69 @@ tiempos_nivel_area <- datos_analysis %>%
   group_by(nivel_gestion_cliente, area_personal_cliente) %>%
   summarise(
     tiempo_procesador_promedio = mean(total_tiempo_procesador / 3600, na.rm = TRUE),
-    tiempo_cliente_promedio = mean(total_tiempo_cliente / 3600, na.rm = TRUE)
+    tiempo_cliente_promedio = mean(total_tiempo_cliente / 3600, na.rm = TRUE),
+    n_tickets = n(),  # Agregamos el conteo de tickets
+    .groups = "drop"
   ) %>%
-  pivot_longer(cols = starts_with("tiempo_"), names_to = "tipo_tiempo", values_to = "horas_promedio")
+  pivot_longer(
+    cols = c(tiempo_procesador_promedio, tiempo_cliente_promedio),
+    names_to = "tipo_tiempo",
+    values_to = "horas_promedio"
+  )
 
+# Calcula el máximo valor de horas_promedio con un 10% de margen
+max_horas <- max(tiempos_nivel_area$horas_promedio, na.rm = TRUE) * 1.1
+
+# Crear el gráfico mejorado
 grafico_nivel_area <- ggplot(tiempos_nivel_area, aes(x = nivel_gestion_cliente, y = horas_promedio, fill = tipo_tiempo)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  facet_wrap(~area_personal_cliente, scales = "free") +
-  labs(title = "Comparativo de Tiempos por Nivel de Gestión y Área de Personal",
-       x = "Nivel de Gestión", y = "Horas Promedio", fill = "Tipo de Tiempo") +
-  scale_fill_manual(values = c("#1f77b4", "#ff7f0e")) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9), width = 0.8) +
+  
+  # Texto dentro de las barras (valores de tiempo)
+  geom_text(
+    aes(label = sprintf("%.1f h", horas_promedio)),
+    position = position_dodge(width = 0.9),
+    angle = 90,
+    hjust = 1.1,
+    vjust = 0.5,
+    size = 4.5,
+    color = "black"
+  ) +
+  
+  # Texto encima de las barras (número de tickets)
+  geom_text(
+    aes(
+      y = max_horas * 0.95,  # Posición cerca del tope del gráfico
+      label = paste("n =", n_tickets),
+      group = nivel_gestion_cliente  # Agrupar por nivel de gestión
+    ),
+    position = position_dodge(width = 0.9),
+    size = 3.5,
+    color = "black",
+    vjust = -0.5
+  ) +
+  
+  facet_wrap(~area_personal_cliente, scales = "fixed") +
+  labs(
+    title = "Comparativo de Tiempos por Nivel de Gestión y Área de Personal",
+    subtitle = "Valores dentro de barras: Horas promedio | Valores superiores: Número de tickets",
+    x = "Nivel de Gestión", 
+    y = "Horas Promedio", 
+    fill = "Tipo de Tiempo"
+  ) +
+  scale_fill_manual(
+    values = c("tiempo_procesador_promedio" = "#1f77b4", "tiempo_cliente_promedio" = "#ff7f0e"),
+    labels = c("Tiempo Procesador", "Tiempo Cliente")
+  ) +
+  scale_y_continuous(limits = c(0, max_horas), expand = expansion(mult = c(0, 0.1))) +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+    legend.position = "bottom",
+    legend.text = element_text(size = 10),
+    strip.text = element_text(size = 10, face = "bold"),
+    plot.subtitle = element_text(size = 9, color = "gray40"),
+    panel.spacing = unit(1, "lines")
+  )
 
 # D.7. Tipos de Tickets y Niveles de Atención | Volúmenes
 grafico_volumen_tipo_nivel <- datos_analysis %>%
@@ -1889,8 +1991,8 @@ combo_departamento <- grid.arrange(
 paths <- list(
   etapas = guardar_grafico(grafico_etapas, "etapas"),
   distribucion = guardar_grafico(grafico_distribucion, "distribucion"),
-  nivel = guardar_grafico(grafico_nivel, "nivel"),
-  area = guardar_grafico(grafico_nivel_area, "area"),
+  nivel = guardar_grafico(grafico_nivel, "nivel", ancho = 10, alto = 6),
+  area = guardar_grafico(grafico_nivel_area, "area", ancho = 10, alto = 8),
   vol_tipo = guardar_grafico(grafico_volumen_tipo_nivel, "vol_tipo", ancho = 10, alto = 6),
   time_tipo = guardar_grafico(grafico_tiempos_tipo_nivel, "time_tipo", ancho = 10, alto = 6),
   departamento = guardar_grafico(combo_departamento, "departamento", ancho = 12, alto = 14),
@@ -1981,9 +2083,9 @@ write.xlsx(tickets_prioritarios, xlsx_output_path, rowNames = FALSE)
 kpi_text_trimestre <- paste0(
   "<b>KPIs del Trimestre:</b><br>",
   "• Tickets Creados: ", kpis_trimestre$total_tickets, "<br>",
-  "  - Tickets por Resolver: ", kpis_trimestre$tickets_por_resolver, " (", kpis_trimestre$porc_por_resolver, "%)<br>",
-  "  - Tickets Espera Confirmación: ", kpis_trimestre$tickets_espera_confirmacion, " (", kpis_trimestre$porc_espera_confirmacion, "%)<br>",
-  "  - Tickets Cerrados: ", kpis_trimestre$tickets_cerrados, " (", kpis_trimestre$porc_cerrados, "%)<br>",
+  "--- Tickets por Resolver: ", kpis_trimestre$tickets_por_resolver, " (", kpis_trimestre$porc_por_resolver, "%)<br>",
+  "--- Tickets Espera Confirmación: ", kpis_trimestre$tickets_espera_confirmacion, " (", kpis_trimestre$porc_espera_confirmacion, "%)<br>",
+  "--- Tickets Cerrados: ", kpis_trimestre$tickets_cerrados, " (", kpis_trimestre$porc_cerrados, "%)<br>",
   "• % SLA General: ", kpis_trimestre$porc_sla_general, "%<br>",
   "• Tiempo Medio Resolución (Cerrados): ", kpis_trimestre$tiempo_medio_resolucion, " hrs<br><br>"
 )
@@ -1993,43 +2095,43 @@ metricas_text_trimestre <- paste0(
   "<b>Métricas de Referencia del Trimestre:</b><br>",
   "<b>[Consultas vs Requerimientos]</b><br>",
   "• <b>Consultas:</b><br>",
-  "  - Total Consultas: ", metricas_trimestre$consultas, " (", metricas_trimestre$porc_consultas, "%)<br>",
-  "    ▪ Por Resolver: ", metricas_trimestre$consultas_por_resolver, " (", metricas_trimestre$porc_consultas_por_resolver, "%)<br>",
-  "    ▪ En Espera Confirmación: ", metricas_trimestre$consultas_espera_confirmacion, " (", metricas_trimestre$porc_consultas_espera_confirmacion, "%)<br>",
-  "    ▪ Cerradas: ", metricas_trimestre$consultas_cerrados, " (", metricas_trimestre$porc_consultas_cerrados, "%)<br>",
-  "  - % SLA (Consultas Cerradas): ", metricas_trimestre$sla_consultas, "%<br>",
-  "  - Tiempo Medio Resolución: ", metricas_trimestre$tiempo_medio_consultas, " hrs<br>",
+  "--- Total Consultas: ", metricas_trimestre$consultas, " (", metricas_trimestre$porc_consultas, "%)<br>",
+  "▪▪▪▪▪ Por Resolver: ", metricas_trimestre$consultas_por_resolver, " (", metricas_trimestre$porc_consultas_por_resolver, "%)<br>",
+  "▪▪▪▪▪ En Espera Confirmación: ", metricas_trimestre$consultas_espera_confirmacion, " (", metricas_trimestre$porc_consultas_espera_confirmacion, "%)<br>",
+  "▪▪▪▪▪ Cerradas: ", metricas_trimestre$consultas_cerrados, " (", metricas_trimestre$porc_consultas_cerrados, "%)<br>",
+  "--- % SLA (Consultas Cerradas): ", metricas_trimestre$sla_consultas, "%<br>",
+  "--- Tiempo Medio Resolución: ", metricas_trimestre$tiempo_medio_consultas, " hrs<br>",
   "• <b>Requerimientos:</b><br>",
-  "  - Total Requerimientos: ", metricas_trimestre$requerimientos, " (", metricas_trimestre$porc_requerimientos, "%)<br>",
-  "    ▪ Por Resolver: ", metricas_trimestre$requerimientos_por_resolver, " (", metricas_trimestre$porc_requerimientos_por_resolver, "%)<br>",
-  "    ▪ En Espera Confirmación: ", metricas_trimestre$requerimientos_espera_confirmacion, " (", metricas_trimestre$porc_requerimientos_espera_confirmacion, "%)<br>",
-  "    ▪ Cerrados: ", metricas_trimestre$requerimientos_cerrados, " (", metricas_trimestre$porc_requerimientos_cerrados, "%)<br>",
-  "  - % SLA (Requerimientos Cerrados): ", metricas_trimestre$sla_requerimientos, "%<br>",
-  "  - Tiempo Medio Resolución: ", metricas_trimestre$tiempo_medio_requerimientos, " hrs<br>",
+  "--- Total Requerimientos: ", metricas_trimestre$requerimientos, " (", metricas_trimestre$porc_requerimientos, "%)<br>",
+  "▪▪▪▪▪ Por Resolver: ", metricas_trimestre$requerimientos_por_resolver, " (", metricas_trimestre$porc_requerimientos_por_resolver, "%)<br>",
+  "▪▪▪▪▪ En Espera Confirmación: ", metricas_trimestre$requerimientos_espera_confirmacion, " (", metricas_trimestre$porc_requerimientos_espera_confirmacion, "%)<br>",
+  "▪▪▪▪▪ Cerrados: ", metricas_trimestre$requerimientos_cerrados, " (", metricas_trimestre$porc_requerimientos_cerrados, "%)<br>",
+  "--- % SLA (Requerimientos Cerrados): ", metricas_trimestre$sla_requerimientos, "%<br>",
+  "--- Tiempo Medio Resolución: ", metricas_trimestre$tiempo_medio_requerimientos, " hrs<br>",
   "<b>[Rhadar vs Escalamientos]</b><br>",
   "• <b>Rhadar:</b><br>",
-  "  - Total Rhadar: ", metricas_trimestre$rhadar, " (", metricas_trimestre$porc_rhadar, "%)<br>",
-  "    ▪ Por Resolver: ", metricas_trimestre$rhadar_por_resolver, " (", metricas_trimestre$porc_rhadar_por_resolver, "%)<br>",
-  "    ▪ En Espera Confirmación: ", metricas_trimestre$rhadar_espera_confirmacion, " (", metricas_trimestre$porc_rhadar_espera_confirmacion, "%)<br>",
-  "    ▪ Cerrados: ", metricas_trimestre$rhadar_cerrados, " (", metricas_trimestre$porc_rhadar_cerrados, "%)<br>",
-  "  - % SLA (Rhadar Cerrados): ", metricas_trimestre$sla_rhadar, "%<br>",
-  "  - Tiempo Medio Resolución: ", metricas_trimestre$tiempo_medio_rhadar, " hrs<br>",
+  "--- Total Rhadar: ", metricas_trimestre$rhadar, " (", metricas_trimestre$porc_rhadar, "%)<br>",
+  "▪▪▪▪▪ Por Resolver: ", metricas_trimestre$rhadar_por_resolver, " (", metricas_trimestre$porc_rhadar_por_resolver, "%)<br>",
+  "▪▪▪▪▪ En Espera Confirmación: ", metricas_trimestre$rhadar_espera_confirmacion, " (", metricas_trimestre$porc_rhadar_espera_confirmacion, "%)<br>",
+  "▪▪▪▪▪ Cerrados: ", metricas_trimestre$rhadar_cerrados, " (", metricas_trimestre$porc_rhadar_cerrados, "%)<br>",
+  "--- % SLA (Rhadar Cerrados): ", metricas_trimestre$sla_rhadar, "%<br>",
+  "--- Tiempo Medio Resolución: ", metricas_trimestre$tiempo_medio_rhadar, " hrs<br>",
   "• <b>Escalamientos:</b><br>",
-  "  - Total Escalamientos: ", metricas_trimestre$escalamientos, " (", metricas_trimestre$porc_escalamientos, "%)<br>",
-  "    ▪ Por Resolver: ", metricas_trimestre$escalamientos_por_resolver, " (", metricas_trimestre$porc_escalamientos_por_resolver, "%)<br>",
-  "    ▪ En Espera Confirmación: ", metricas_trimestre$escalamientos_espera_confirmacion, " (", metricas_trimestre$porc_escalamientos_espera_confirmacion, "%)<br>",
-  "    ▪ Cerrados: ", metricas_trimestre$escalamientos_cerrados, " (", metricas_trimestre$porc_escalamientos_cerrados, "%)<br>",
-  "  - % SLA (Escalamientos Cerrados): ", metricas_trimestre$sla_escalamientos, "%<br>",
-  "  - Tiempo Medio Resolución: ", metricas_trimestre$tiempo_medio_escalamientos, " hrs<br><br>"
+  "--- Total Escalamientos: ", metricas_trimestre$escalamientos, " (", metricas_trimestre$porc_escalamientos, "%)<br>",
+  "▪▪▪▪▪ Por Resolver: ", metricas_trimestre$escalamientos_por_resolver, " (", metricas_trimestre$porc_escalamientos_por_resolver, "%)<br>",
+  "▪▪▪▪▪ En Espera Confirmación: ", metricas_trimestre$escalamientos_espera_confirmacion, " (", metricas_trimestre$porc_escalamientos_espera_confirmacion, "%)<br>",
+  "▪▪▪▪▪ Cerrados: ", metricas_trimestre$escalamientos_cerrados, " (", metricas_trimestre$porc_escalamientos_cerrados, "%)<br>",
+  "--- % SLA (Escalamientos Cerrados): ", metricas_trimestre$sla_escalamientos, "%<br>",
+  "--- Tiempo Medio Resolución: ", metricas_trimestre$tiempo_medio_escalamientos, " hrs<br><br>"
 )
 
 # F.3. Texto de Métricas de Referencia del Día Previo
 metricas_text_dia_previo <- paste0(
   "<b>Métricas de Referencia del Día Previo:</b><br>",
   "• Tickets Creados: ", metricas_dia_previo$tickets_creados_dia_previo, "<br>",
-  "  - Por Resolver: ", metricas_dia_previo$tickets_por_resolver_dia_previo, " (", metricas_dia_previo$porc_por_resolver_dia_previo, "%)<br>",
-  "  - En Espera Confirmación: ", metricas_dia_previo$tickets_espera_confirmacion_dia_previo, " (", metricas_dia_previo$porc_espera_confirmacion_dia_previo, "%)<br>",
-  "  - Tickets Cerrados: ", metricas_dia_previo$tickets_cerrados_dia_previo, " (", metricas_dia_previo$porc_cerrados_dia_previo, "%)<br>"
+  "--- Por Resolver: ", metricas_dia_previo$tickets_por_resolver_dia_previo, " (", metricas_dia_previo$porc_por_resolver_dia_previo, "%)<br>",
+  "--- En Espera Confirmación: ", metricas_dia_previo$tickets_espera_confirmacion_dia_previo, " (", metricas_dia_previo$porc_espera_confirmacion_dia_previo, "%)<br>",
+  "--- Tickets Cerrados: ", metricas_dia_previo$tickets_cerrados_dia_previo, " (", metricas_dia_previo$porc_cerrados_dia_previo, "%)<br>"
 )
 
 # G.4. Cuerpo del Correo

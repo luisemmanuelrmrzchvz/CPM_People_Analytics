@@ -10,8 +10,8 @@ archivo_excel <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/His
 # Leer el archivo XLSX ignorando la primera fila (títulos de columnas)
 datos <- read_excel(archivo_excel, skip = 1, col_names = FALSE)
 
-# Definir las columnas a formatear como fechas (5, 6, 14, 18, 19, 20, 28, 64)
-columnas_fecha <- c(5, 6, 13, 17, 18, 19, 27, 63)
+# Definir las columnas a formatear como fechas (5, 6, 14, 18, 19, 20, 28, 62)
+columnas_fecha <- c(5, 6, 13, 17, 18, 19, 27, 62)
 
 # Convertir las columnas seleccionadas a formato de fecha "YYYY-MM-DD"
 for (col in columnas_fecha) {
@@ -34,9 +34,9 @@ columnas_db <- c(
   "posicion_municipio", "posicion_ubicacion", "posicion_puesto", "id_centro_costos", "nivel_gestion",
   "nivel_1", "nivel_2", "nivel_3", "tipo_contrato", "nombre_puesto", "tipo_reclutamiento", "area_cobranza",
   "puesto_generico", "area_especialidad_deseada", "clasificacion_riesgo", "clasificacion_liderazgo",
-  "disponibilidad_viajar", "escolaridad_deseada", "grupo_personal", "limitante", "modalidad_puesto",
+  "disponibilidad_viajar", "escolaridad_deseada", "grupo_personal", "modalidad_puesto",
   "perfil_profesional", "pruebas_psicometricas", "segmento_puesto", "genero", "estado_civil", "estado_nacimiento",
-  "fecha_nacimiento", "lengua_nativa", "limitante_fisica", "nacionalidad", "pais_nacimiento",
+  "fecha_nacimiento", "lengua_nativa", "nacionalidad", "pais_nacimiento",
   "segunda_nacionalidad","jefe_inmediato", "software_avanzado", "software_basico","software_intermedio",
   "tiempo_experiencia"
 )
