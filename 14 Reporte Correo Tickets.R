@@ -50,13 +50,16 @@ tickets_mes_actual AS (
         catalog_tickets.categoria,
         catalog_tickets.subcategoria,
         codigo_tickets.agente_servicio,
-        CASE WHEN catalog_tickets.prioridad = 'Prioridad 1 - Inmediata' THEN 28800
+        CASE WHEN catalog_tickets.categoria = 'Beneficios Económicos Sindicalizados' THEN 259200
+            WHEN catalog_tickets.subcategoria = 'Reposición de tarjeta de Nómina' THEN 460800
+            WHEN catalog_tickets.subcategoria = 'Constancia Laboral' THEN 86400
+            WHEN catalog_tickets.prioridad = 'Prioridad 1 - Inmediata' THEN 28800
             WHEN catalog_tickets.prioridad = 'Prioridad 2 - Normal' THEN 86400
             ELSE 144000 END AS tiempo_objetivo
     FROM codigo_tickets 
     LEFT JOIN catalog_tickets
         ON codigo_tickets.id_catalog = catalog_tickets.id_catalog
-    WHERE codigo_tickets.fecha_creado BETWEEN '2025-01-01' AND '2025-03-31'
+    WHERE codigo_tickets.fecha_creado BETWEEN '2025-04-01' AND '2025-06-30'
     AND catalog_tickets.tipo_atencion = 'Ticket Válido'
     AND codigo_tickets.agente_servicio IS NOT NULL
 ),
@@ -1114,7 +1117,10 @@ tickets_mes_actual AS (
         catalog_tickets.categoria,
         catalog_tickets.subcategoria,
         codigo_tickets.agente_servicio,
-        CASE WHEN catalog_tickets.prioridad = 'Prioridad 1 - Inmediata' THEN 28800
+        CASE WHEN catalog_tickets.categoria = 'Beneficios Económicos Sindicalizados' THEN 259200
+            WHEN catalog_tickets.subcategoria = 'Reposición de tarjeta de Nómina' THEN 460800
+            WHEN catalog_tickets.subcategoria = 'Constancia Laboral' THEN 86400
+            WHEN catalog_tickets.prioridad = 'Prioridad 1 - Inmediata' THEN 28800
             WHEN catalog_tickets.prioridad = 'Prioridad 2 - Normal' THEN 86400
             ELSE 144000 END AS tiempo_objetivo
     FROM codigo_tickets 
@@ -2182,7 +2188,7 @@ smtp_send(
   email,
   from = "luis_ramirezC@cpm.coop",  # Tu correo institucional
   to = c("gerardo_nahum@cpm.coop", "bibiana_rico@cpm.coop","miriam_ramireza@cpm.coop", 
-         "alejandra_tavares@cpm.coop", "maria_garciam@cpm.coop"),  # Correos de los destinatarios
+         "alejandra_tavares@cpm.coop", "ana_banuelos@cpm.coop"),  # Correos de los destinatarios
   cc = "luis_ramirezC@cpm.coop",  # Correos de destinatarios-copias
   subject = paste("Reporte Trimestral SLA C4C -", paste(fecha_anterior, collapse = " y ")),
   credentials = creds

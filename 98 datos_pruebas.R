@@ -13,7 +13,24 @@ conn <- dbConnect(RSQLite::SQLite(), db_path)
 
 # 2. Definir la consulta SQL que deseas ejecutar
 query <- "
-
+SELECT
+    hist_posiciones.fecha_daily,
+    hist_posiciones.id_colaborador,
+    hist_posiciones.id_posicion,
+    hist_posiciones.status,
+    hist_posiciones.observaciones,
+    hist_posiciones.motivo_de_posicion,
+    hist_posiciones.codigo_motivo_especifico,
+    hist_posiciones.vacante,
+    hist_posiciones.tipo_de_posicion
+FROM hist_posiciones
+WHERE hist_posiciones.status = 'A'
+    AND hist_posiciones.fecha_daily = '2025-06-30'
+    AND (hist_posiciones.observaciones NOT IN ('INACTIVA POR CORE BANCARIO','INACTIVA POR IT') OR observaciones IS NULL)
+    AND (hist_posiciones.codigo_motivo_especifico <> 'ML' OR codigo_motivo_especifico IS NULL)
+    AND NOT (hist_posiciones.motivo_de_posicion IN ('CAMBIO DE DATOS','CAMBIO DE PUESTO','PREVENTIVO')
+      AND hist_posiciones.vacante = 'True')
+;
 "
 
 # 3. Ejecutar la consulta y obtener los resultados

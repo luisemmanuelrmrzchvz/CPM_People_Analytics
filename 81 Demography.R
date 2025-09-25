@@ -387,7 +387,7 @@ library(scales)
 library(glue)
 
 # 2. Cargar y preparar datos ----
-file_path <- "C:/Users/racl26345/Documents/Gestión de Indicadores/Indicadores de RH (2015-2024)/Indicadores 2025/5. Mayo/02 Management/32_Datos_demograficos_2025_05_31.xlsx"
+file_path <- "C:\\Users\\racl26345\\Documents\\Gestión de Indicadores\\Indicadores de RH (2015-2024)\\Indicadores 2025\\05. Mayo\\02 Management\\32_Datos_demograficos_2025_05_31.xlsx"
 
 data <- read_xlsx(file_path) %>%
   mutate(
