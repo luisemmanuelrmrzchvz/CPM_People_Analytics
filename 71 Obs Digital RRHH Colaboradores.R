@@ -6,34 +6,37 @@ library(gridExtra)
 library(scales)
 library(grid)
 
-# Configurar estilo minimalista para videowall (tamaños originales)
+# Configurar estilo minimalista para videowall con fondo oscuro
 theme_videowall <- function() {
   theme_minimal() +
     theme(
-      plot.background = element_rect(fill = "#F0F2F6", color = NA),
-      panel.background = element_rect(fill = "#F0F2F6", color = NA),
-      panel.grid.major = element_line(color = "#D1D9E6", linewidth = 0.2),
+      plot.background = element_rect(fill = "#1E1E1E", color = NA),
+      panel.background = element_rect(fill = "#2D2D2D", color = NA),
+      panel.grid.major = element_line(color = "#404040", linewidth = 0.2),
       panel.grid.minor = element_blank(),
-      text = element_text(family = "sans-serif", color = "#2E3440"),
-      plot.title = element_text(size = 32, face = "bold", hjust = 0.5, color = "#2E3440"),
-      plot.subtitle = element_text(size = 24, hjust = 0.5, color = "#4C566A"),
-      axis.title = element_text(size = 20, color = "#4C566A"),
-      axis.text = element_text(size = 18, color = "#4C566A"),
+      text = element_text(family = "sans-serif", color = "#E8E8E8"),
+      plot.title = element_text(size = 32, face = "bold", hjust = 0.5, color = "#F5F5F5"),
+      plot.subtitle = element_text(size = 24, hjust = 0.5, color = "#B0B0B0"),
+      axis.title = element_text(size = 20, color = "#B0B0B0"),
+      axis.text = element_text(size = 18, color = "#B0B0B0"),
       axis.text.x = element_text(angle = 45, hjust = 1, size = 16),
-      legend.text = element_text(size = 16),
-      legend.title = element_text(size = 18),
-      strip.text = element_text(size = 16, face = "bold")
+      legend.text = element_text(size = 16, color = "#E8E8E8"),
+      legend.title = element_text(size = 18, color = "#E8E8E8"),
+      legend.background = element_rect(fill = "#2D2D2D", color = NA),
+      legend.key = element_rect(fill = "#2D2D2D", color = NA),
+      strip.text = element_text(size = 16, face = "bold", color = "#E8E8E8"),
+      strip.background = element_rect(fill = "#3D3D3D", color = NA)
     )
 }
 
-# Paleta de colores corporativa
+# Paleta de colores para fondo oscuro (más vibrantes para mejor contraste)
 colors <- c(
   "F" = "#FF6B6B",    # Rojo coral para mujeres
   "M" = "#4ECDC4",    # Verde azulado para hombres
-  "primary" = "#2E5BFF",
-  "secondary" = "#00C7BE",
-  "accent" = "#FF3B30",
-  "success" = "#34C759"
+  "primary" = "#4A7AFF",     # Azul más brillante
+  "secondary" = "#00E5D4",   # Verde azulado más vibrante
+  "accent" = "#FF5252",      # Rojo más brillante
+  "success" = "#4CD964"      # Verde más vibrante
 )
 
 # Conectar a la base de datos
@@ -122,17 +125,18 @@ total_activos <- sum(datos$colaboradores_activos)
 total_mujeres <- sum(datos$colaboradores_activos[datos$genero == 'F'])
 total_hombres <- sum(datos$colaboradores_activos[datos$genero == 'M'])
 
-# Función para crear recuadros de indicadores (tamaños originales)
+# Función para crear recuadros de indicadores con fondo oscuro
 crear_indicador <- function(valor, titulo, color) {
   ggplot() +
     annotate("rect", xmin = -1, xmax = 1, ymin = -1, ymax = 1, 
-             fill = color, alpha = 0.8, color = NA) +
+             fill = color, alpha = 0.9, color = NA) +
     annotate("text", x = 0, y = 0.3, label = format(valor, big.mark = ","), 
              size = 12, fontface = "bold", color = "white") +
     annotate("text", x = 0, y = -0.3, label = titulo, 
              size = 8, color = "white", fontface = "bold") +
     theme_void() +
-    coord_fixed()
+    coord_fixed() +
+    theme(plot.background = element_rect(fill = "#1E1E1E", color = NA))
 }
 
 # Crear recuadros de indicadores
@@ -169,7 +173,7 @@ crear_tabla_estetica_facetas <- function(data, x_var, y_var) {
   }
   
   ggplot(data_summary, aes(x = !!sym(x_var), y = !!sym(y_var), fill = genero)) +
-    geom_tile(color = "white", linewidth = 1, alpha = 0.9) +
+    geom_tile(color = "#404040", linewidth = 1, alpha = 0.9) +  # Borde más oscuro
     # AUMENTAR TAMAÑO DE NÚMEROS EN 20%: de 5 a 6
     geom_text(aes(label = paste0(format(total, big.mark = ","), "\n(", round(porcentaje, 1), "%)")),
               color = "white", size = 7, fontface = "bold", lineheight = 0.8) + # Cambiado de 5 a 6
@@ -178,7 +182,9 @@ crear_tabla_estetica_facetas <- function(data, x_var, y_var) {
     facet_wrap(~genero, nrow = 1) +
     theme_videowall() +
     theme(axis.text.x = element_text(angle = 45, hjust = 1),
-          legend.position = "none")
+          legend.position = "none",
+          panel.background = element_rect(fill = "#2D2D2D"),
+          plot.background = element_rect(fill = "#1E1E1E"))
 }
 
 # Crear las tablas solicitadas con números más grandes
@@ -195,11 +201,16 @@ tabla3 <- crear_tabla_estetica_facetas(datos, "nivel_gestion", "tenure_group") +
 tabla4 <- crear_tabla_estetica_facetas(datos, "regional", "tenure_group") + 
   labs(title = "Distribución por Regional y Antigüedad")
 
-# Crear dashboard completo
+# Función para crear títulos con fondo oscuro
+crear_titulo <- function(texto) {
+  textGrob(texto, 
+           gp = gpar(fontsize = 36, fontface = "bold", col = "#F5F5F5"))
+}
+
+# Crear dashboard completo con fondo oscuro - CORREGIDO
 dashboard_completo <- grid.arrange(
   # Título principal
-  textGrob("DASHBOARD DE COLABORADORES - RESUMEN GENERAL", 
-           gp = gpar(fontsize = 36, fontface = "bold", col = "#2E3440")),
+  crear_titulo("DASHBOARD DE COLABORADORES - RESUMEN GENERAL"),
   
   # Primera fila: Indicadores principales
   arrangeGrob(
@@ -226,51 +237,48 @@ dashboard_completo <- grid.arrange(
   padding = unit(1, "cm")
 )
 
-# Guardar imagen en alta resolución para videowall
+# Guardar imagen en alta resolución para videowall con fondo oscuro
 cat("Guardando dashboard completo...\n")
-ggsave("C:/Users/racl26345/Documents/Reportes Automatizados/dashboard_colaboradores_4K.png",
+ggsave("C:/Users/racl26345/Documents/Reportes Automatizados/Observatorio Digital/dashboard_colaboradores_4K_oscuro.png",
        dashboard_completo,
        width = 38.4, height = 21.6, dpi = 100,
-       bg = "#F0F2F6")
+       bg = "#1E1E1E")  # Fondo oscuro
 
-# También crear imágenes individuales para cada sección
+# También crear imágenes individuales para cada sección con fondo oscuro
 cat("Guardando imágenes individuales...\n")
 
 # Indicadores principales
 indicadores_principales <- arrangeGrob(
-  textGrob("INDICADORES PRINCIPALES", 
-           gp = gpar(fontsize = 28, fontface = "bold", col = "#2E3440")),
+  crear_titulo("INDICADORES PRINCIPALES"),
   arrangeGrob(indicador_total, indicador_mujeres, indicador_hombres, nrow = 1),
   ncol = 1, heights = c(0.1, 0.9)
 )
 
-ggsave("C:/Users/racl26345/Documents/Reportes Automatizados/indicadores_principales.png",
+ggsave("C:/Users/racl26345/Documents/Reportes Automatizados/Observatorio Digital/indicadores_principales_oscuro.png",
        indicadores_principales,
-       width = 38.4, height = 5, dpi = 100, bg = "#F0F2F6")
+       width = 38.4, height = 5, dpi = 100, bg = "#1E1E1E")
 
 # Distribución por generación
 distribucion_generacion <- arrangeGrob(
-  textGrob("DISTRIBUCIÓN POR GENERACIÓN", 
-           gp = gpar(fontsize = 28, fontface = "bold", col = "#2E3440")),
+  crear_titulo("DISTRIBUCIÓN POR GENERACIÓN"),
   arrangeGrob(tabla1, tabla2, nrow = 1),
   ncol = 1, heights = c(0.1, 0.9)
 )
 
-ggsave("C:/Users/racl26345/Documents/Reportes Automatizados/distribucion_generacion.png",
+ggsave("C:/Users/racl26345/Documents/Reportes Automatizados/Observatorio Digital/distribucion_generacion_oscuro.png",
        distribucion_generacion,
-       width = 38.4, height = 12, dpi = 100, bg = "#F0F2F6")
+       width = 38.4, height = 12, dpi = 100, bg = "#1E1E1E")
 
 # Distribución por antigüedad
 distribucion_antiguedad <- arrangeGrob(
-  textGrob("DISTRIBUCIÓN POR ANTIGÜEDAD", 
-           gp = gpar(fontsize = 28, fontface = "bold", col = "#2E3440")),
+  crear_titulo("DISTRIBUCIÓN POR ANTIGÜEDAD"),
   arrangeGrob(tabla3, tabla4, nrow = 1),
   ncol = 1, heights = c(0.1, 0.9)
 )
 
-ggsave("C:/Users/racl26345/Documents/Reportes Automatizados/distribucion_antiguedad.png",
+ggsave("C:/Users/racl26345/Documents/Reportes Automatizados/Observatorio Digital/distribucion_antiguedad_oscuro.png",
        distribucion_antiguedad,
-       width = 38.4, height = 12, dpi = 100, bg = "#F0F2F6")
+       width = 38.4, height = 12, dpi = 100, bg = "#1E1E1E")
 
 cat("\n=== PROCESO COMPLETADO ===\n")
 cat("Total de colaboradores activos:", format(total_activos, big.mark = ","), "\n")
@@ -278,4 +286,5 @@ cat("Total de mujeres:", format(total_mujeres, big.mark = ","), "\n")
 cat("Total de hombres:", format(total_hombres, big.mark = ","), "\n")
 cat("Porcentaje de mujeres:", round(total_mujeres/total_activos*100, 1), "%\n")
 cat("Porcentaje de hombres:", round(total_hombres/total_activos*100, 1), "%\n")
-cat("Archivos guardados en: C:/Users/racl26345/Documents/Reportes Automatizados/\n")
+cat("Archivos guardados en: C:/Users/racl26345/Documents/Reportes Automatizados/Observatorio Digital/\n")
+cat("NOTA: Todos los archivos tienen fondo oscuro para reducir fatiga visual\n")

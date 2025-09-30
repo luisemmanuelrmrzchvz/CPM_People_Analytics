@@ -75,16 +75,16 @@ print("Datos recibidos desde R:")
 print(f"Dimensiones: {data.shape}")
 print(f"Métricas: {list(data[\'Concepto\'].unique())}")
 
-# Configuración minimalista para videowall
+# Configuración minimalista para videowall - FONDO OSCURO
 plt.style.use("default")
-mpl.rcParams["figure.facecolor"] = "#F0F2F6"
-mpl.rcParams["axes.facecolor"] = "#F0F2F6"  # Mismo color que el fondo
-mpl.rcParams["savefig.facecolor"] = "#F0F2F6"
+mpl.rcParams["figure.facecolor"] = "#1E1E1E"  # Gris muy oscuro
+mpl.rcParams["axes.facecolor"] = "#2D2D2D"    # Gris oscuro para gráficos
+mpl.rcParams["savefig.facecolor"] = "#1E1E1E"
 mpl.rcParams["axes.edgecolor"] = "none"
-mpl.rcParams["axes.labelcolor"] = "#2E3440"
-mpl.rcParams["xtick.color"] = "#4C566A"
-mpl.rcParams["ytick.color"] = "#4C566A"
-mpl.rcParams["text.color"] = "#2E3440"
+mpl.rcParams["axes.labelcolor"] = "#E8E8E8"   # Texto claro
+mpl.rcParams["xtick.color"] = "#B0B0B0"       # Marcadores claros
+mpl.rcParams["ytick.color"] = "#B0B0B0"       # Marcadores claros
+mpl.rcParams["text.color"] = "#E8E8E8"        # Texto principal claro
 mpl.rcParams["font.size"] = 28
 mpl.rcParams["font.family"] = "sans-serif"
 mpl.rcParams["font.sans-serif"] = ["Segoe UI", "Arial", "DejaVu Sans"]
@@ -95,18 +95,18 @@ mpl.rcParams["lines.linewidth"] = 8
 mpl.rcParams["lines.markersize"] = 20
 mpl.rcParams["grid.alpha"] = 0.1
 
-# Paleta de colores minimalista
+# Paleta de colores para fondo oscuro
 colors = {
-    "primary": "#2E5BFF",      # Azul corporativo
-    "secondary": "#00C7BE",    # Verde azulado
-    "accent": "#FF3B30",       # Rojo para alertas
-    "success": "#34C759",      # Verde éxito
-    "warning": "#FFCC00",      # Amarillo
-    "text": "#1D1D1F",         # Texto oscuro
-    "light_text": "#8E8E93",   # Texto secundario
-    "background": "#F0F2F6",   # Fondo
-    "card": "#F0F2F6",         # Fondo gráficos (mismo que background)
-    "chyron_text": "#2E3440"   # Texto oscuro para chyron
+    "primary": "#4A7AFF",      # Azul más brillante para contraste
+    "secondary": "#00E5D4",    # Verde azulado más vibrante
+    "accent": "#FF5252",       # Rojo más brillante
+    "success": "#4CD964",      # Verde más vibrante
+    "warning": "#FFD740",      # Amarillo más brillante
+    "text": "#F5F5F5",         # Texto casi blanco
+    "light_text": "#A0A0A0",   # Texto secundario gris claro
+    "background": "#1E1E1E",   # Fondo principal oscuro
+    "card": "#2D2D2D",         # Fondo de gráficos gris oscuro
+    "chyron_text": "#E8E8E8"   # Texto claro para chyron
 }
 
 # Indicadores con semaforización invertida y cálculo especial
@@ -396,7 +396,7 @@ def create_trend_chart(ax, metric_data, metric_name):
 # Función para crear faldón/chyron de leyendas en la parte inferior (sin superponer)
 def create_legend_chyron(fig, grid_spec):
     ax_legend = fig.add_subplot(grid_spec[2, :])
-    ax_legend.set_facecolor("#E0E5F0")  # Fondo más claro para mejor contraste
+    ax_legend.set_facecolor("#3D3D3D")  # Fondo gris medio oscuro para el chyron
     ax_legend.set_position([0.1, 0.02, 0.8, 0.06])  # Posición fija en la parte inferior
     
     # Leyendas con texto oscuro para mejor contraste
