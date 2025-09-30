@@ -507,3 +507,10 @@ print(paste("👥 Total colaboradores:", sum(resumen_regional$total_colaboradore
 [1] "Cargando shapefile de municipios de México..."
 > municipios_mexico <- st_read(ruta_shp_municipios, quiet = TRUE)
 Error: Cannot open "C:/Users/racl26345/Documents/Shapes/inegi_municipios.shp"; The file doesn't seem to exist.
+
+
+
+
+
+
+https://www.inegi.org.mx/app/biblioteca/ficha.html?upc=889463807952
