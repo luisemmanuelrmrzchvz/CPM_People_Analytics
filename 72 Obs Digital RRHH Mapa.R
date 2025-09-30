@@ -399,3 +399,111 @@ print("✅ MAPA CON MUNICIPIOS CREADO EXITOSAMENTE!")
 print(paste("📍 Municipios mapeados:", nrow(datos)))
 print(paste("👥 Total colaboradores:", sum(resumen_regional$total_colaboradores)))
 
+
+
+
+#####################################################################################
+
+
+> # ==============================
+> # MAPA DE PRESENCIA MUNICIPAL - COOPERATIVA
+  > # ==============================
+> 
+  > library(RSQLite)
+> library(ggplot2)
+> library(dplyr)
+> library(tidyr)
+> library(stringr)
+> library(sf)
+> library(patchwork)
+> library(rnaturalearth)
+> library(rnaturalearthhires) # remotes::install_github("ropensci/rnaturalearthhires")
+> 
+  > # --- CONFIGURACIÓN INICIAL ---
+  > ruta_db <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
+> ruta_salida <- "C:/Users/racl26345/Documents/Reportes Automatizados/"
+> ruta_shp_municipios <- "C:/Users/racl26345/Documents/Shapes/inegi_municipios.shp" # Ajustar ruta
+> 
+  > # --- PALETA DE COLORES CORPORATIVA ---
+  > colores_regionales <- c(
+    +   "CENTRO"   = "#1f77b4",
+    +   "NORESTE"  = "#ff7f0e", 
+    +   "NORTE"    = "#2ca02c",
+    +   "OCCIDENTE"= "#d62728",
+    +   "ODG"      = "#9467bd",
+    +   "SUR"      = "#8c564b",
+    +   "SURESTE"  = "#e377c2"
+    + )
+> 
+  > # --- ESTILO PARA MAPA ---
+  > theme_mapa_real <- function() {
+    +   theme_void() +
+      +     theme(
+        +       plot.background = element_rect(fill = "#F0F2F6", color = NA),
+        +       panel.background = element_rect(fill = "#F0F2F6", color = NA),
+        +       text = element_text(color = "#2E3440", family = "sans"),
+        +       plot.title = element_text(face = "bold", size = 45, hjust = 0.5, margin = margin(b = 15)),
+        +       plot.subtitle = element_text(size = 36, hjust = 0.5, margin = margin(b = 20)),
+        +       legend.text = element_text(size = 20),
+        +       legend.title = element_text(face = "bold", size = 24),
+        +       plot.margin = margin(30, 30, 30, 30)
+        +     )
+    + }
+> 
+  > # --- EXTRAER DATOS DESDE SQLITE ---
+  > con <- dbConnect(RSQLite::SQLite(), ruta_db)
+> 
+  > query <- "
++ WITH colaboradores_activos AS (
++     SELECT 
++         id_colaborador,
++         regional,
++         estado,
++         municipio
++     FROM hist_posiciones
++     WHERE fecha_daily = DATE('now', 'start of month', '-1 day')
++         AND status = 'A'
++         AND vacante = 'False'
++ ),
++ inegi_unicos AS (
++     SELECT 
++         estado_rhenueva,
++         municipio_rhenueva,
++         cve_ent,
++         cve_mun,
++         lat_decimal,
++         lon_decimal
++     FROM inegi_stds_mncps
++     GROUP BY estado_rhenueva, municipio_rhenueva
++ )
++ SELECT
++     ca.regional,
++     iu.cve_ent,
++     iu.cve_mun,
++     COUNT(DISTINCT ca.id_colaborador) AS colaboradores_activos
++ FROM colaboradores_activos ca
++ LEFT JOIN inegi_unicos iu
++     ON (ca.estado || '_' || ca.municipio) = (iu.estado_rhenueva || '_' || iu.municipio_rhenueva)
++ WHERE iu.cve_ent IS NOT NULL AND iu.cve_mun IS NOT NULL
++ GROUP BY ca.regional, iu.cve_ent, iu.cve_mun
++ "
+> 
+  > datos <- dbGetQuery(con, query)
+> dbDisconnect(con)
+> 
+  > # --- PREPARAR DATOS ---
+  > datos <- datos %>%
+  +   mutate(
+    +     cve_ent = str_pad(as.character(cve_ent), 2, "left", "0"),
+    +     cve_mun = str_pad(as.character(cve_mun), 3, "left", "0"),
+    +     CVEGEO = paste0(cve_ent, cve_mun)
+    +   )
+> 
+  > print(paste("Municipios con presencia:", nrow(datos)))
+[1] "Municipios con presencia: 331"
+> 
+  > # --- CARGAR SHAPEFILE MUNICIPIOS ---
+  > print("Cargando shapefile de municipios de México...")
+[1] "Cargando shapefile de municipios de México..."
+> municipios_mexico <- st_read(ruta_shp_municipios, quiet = TRUE)
+Error: Cannot open "C:/Users/racl26345/Documents/Shapes/inegi_municipios.shp"; The file doesn't seem to exist.
