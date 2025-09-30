@@ -442,10 +442,10 @@ theme_mapa_real <- function() {
       plot.background = element_rect(fill = "#F0F2F6", color = NA),
       panel.background = element_rect(fill = "#F0F2F6", color = NA),
       text = element_text(color = "#2E3440", family = "sans"),
-      plot.title = element_text(face = "bold", size = 36, hjust = 0.5, margin = margin(b = 15)),
-      plot.subtitle = element_text(size = 24, hjust = 0.5, margin = margin(b = 20)),
-      legend.text = element_text(size = 14),
-      legend.title = element_text(face = "bold", size = 16),
+      plot.title = element_text(face = "bold", size = 45, hjust = 0.5, margin = margin(b = 15)), # Original size = 36
+      plot.subtitle = element_text(size = 36, hjust = 0.5, margin = margin(b = 20)), # Original size = 24
+      legend.text = element_text(size = 20), # Original size = 14
+      legend.title = element_text(face = "bold", size = 24), # Original size = 16
       plot.margin = margin(30, 30, 30, 30)
     )
 }
@@ -567,14 +567,16 @@ resumen_regional <- datos %>%
 
 panel_estadisticas <- ggplot(resumen_regional, aes(x = 1, y = reorder(regional, total_colaboradores))) +
   geom_tile(aes(fill = regional), width = 0.25, height = 0.7, alpha = 0.9) +
-  geom_text(aes(label = etiqueta), hjust = 0, nudge_x = 0.3, size = 4.5,
+  geom_text(aes(label = etiqueta), hjust = 0, nudge_x = 0.3, size = 11,# Original 4.5
             lineheight = 0.8, color = "#2E3440", fontface = "bold") +
   scale_fill_manual(values = colores_regionales) +
   scale_x_continuous(limits = c(1, 8)) +
   theme_void() +
   theme(
     plot.background = element_rect(fill = "#F0F2F6", color = NA),
-    plot.title = element_text(face = "bold", size = 18, hjust = 0.5, margin = margin(b = 10))
+    plot.title = element_text(face = "bold", size = 40, hjust = 0.5, margin = margin(b = 10)), # Original size = 18
+    legend.text = element_text(size = 24, face = "bold"),
+    legend.title = element_text(size = 26, face = "bold")
   ) +
   labs(title = "RESUMEN POR REGIONAL")
 
