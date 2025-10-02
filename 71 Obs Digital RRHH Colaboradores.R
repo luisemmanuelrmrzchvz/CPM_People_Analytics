@@ -241,7 +241,7 @@ dashboard_completo <- grid.arrange(
 cat("Guardando dashboard completo...\n")
 ggsave("C:/Users/racl26345/Documents/Reportes Automatizados/Observatorio Digital/dashboard_colaboradores_4K_oscuro.png",
        dashboard_completo,
-       width = 38.4, height = 21.6, dpi = 100,
+       width = 19.6, height = 10.8, dpi = 100, #38.4 X 21.6
        bg = "#1E1E1E")  # Fondo oscuro
 
 # También crear imágenes individuales para cada sección con fondo oscuro
@@ -256,7 +256,7 @@ indicadores_principales <- arrangeGrob(
 
 ggsave("C:/Users/racl26345/Documents/Reportes Automatizados/Observatorio Digital/indicadores_principales_oscuro.png",
        indicadores_principales,
-       width = 38.4, height = 5, dpi = 100, bg = "#1E1E1E")
+       width = 19.6, height = 2.5, dpi = 100, bg = "#1E1E1E") #38.4 X 5
 
 # Distribución por generación
 distribucion_generacion <- arrangeGrob(
@@ -267,7 +267,7 @@ distribucion_generacion <- arrangeGrob(
 
 ggsave("C:/Users/racl26345/Documents/Reportes Automatizados/Observatorio Digital/distribucion_generacion_oscuro.png",
        distribucion_generacion,
-       width = 38.4, height = 12, dpi = 100, bg = "#1E1E1E")
+       width = 19.6, height = 6, dpi = 100, bg = "#1E1E1E")#38.4 X 12
 
 # Distribución por antigüedad
 distribucion_antiguedad <- arrangeGrob(
@@ -278,7 +278,7 @@ distribucion_antiguedad <- arrangeGrob(
 
 ggsave("C:/Users/racl26345/Documents/Reportes Automatizados/Observatorio Digital/distribucion_antiguedad_oscuro.png",
        distribucion_antiguedad,
-       width = 38.4, height = 12, dpi = 100, bg = "#1E1E1E")
+       width = 19.6, height = 6, dpi = 100, bg = "#1E1E1E")#38.4 X 5
 
 cat("\n=== PROCESO COMPLETADO ===\n")
 cat("Total de colaboradores activos:", format(total_activos, big.mark = ","), "\n")

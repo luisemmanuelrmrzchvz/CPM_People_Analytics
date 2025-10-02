@@ -59,7 +59,7 @@ tickets_mes_actual AS (
     FROM codigo_tickets 
     LEFT JOIN catalog_tickets
         ON codigo_tickets.id_catalog = catalog_tickets.id_catalog
-    WHERE codigo_tickets.fecha_creado BETWEEN '2025-04-01' AND '2025-06-30'
+    WHERE codigo_tickets.fecha_creado BETWEEN '2025-07-01' AND '2025-09-30'
     AND catalog_tickets.tipo_atencion = 'Ticket Válido'
     AND codigo_tickets.agente_servicio IS NOT NULL
 ),
