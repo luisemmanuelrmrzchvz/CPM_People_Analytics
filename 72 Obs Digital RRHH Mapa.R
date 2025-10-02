@@ -286,8 +286,8 @@ output_file <- file.path(ruta_salida, "mapa_municipios_por_regional_OSCURO.png")
 ggsave(
   filename = output_file,
   plot = layout_final,
-  width = 3840/100,   # ancho en pulgadas (ajusta si quieres otra resolución)
-  height = 2160/100,  # alto
+  width = 1920/100,   # ancho en pulgadas (ajusta si quieres otra resolución) 3840
+  height = 1086/100,  # alto 2160
   dpi = 300,
   bg = "#1E1E1E",  # FONDO OSCURO
   limitsize = FALSE
