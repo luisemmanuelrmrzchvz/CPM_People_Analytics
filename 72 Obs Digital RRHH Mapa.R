@@ -283,15 +283,27 @@ panel_estadisticas <- ggplot(resumen_regional, aes(x = 1, y = reorder(regional, 
 layout_final <- mapa_con_municipios + panel_estadisticas + plot_layout(widths = c(2, 1))
 
 output_file <- file.path(ruta_salida, "mapa_municipios_por_regional_OSCURO.png")
+
 ggsave(
   filename = output_file,
   plot = layout_final,
-  width = 1920/100,   # ancho en pulgadas (ajusta si quieres otra resolución) 3840
-  height = 1086/100,  # alto 2160
-  dpi = 300,
+  width = 5760/100,   # ancho en pulgadas (ajusta si quieres otra resolución) 3840
+  height = 2160/100,  # alto 2160
+  dpi = 100, # 300
   bg = "#1E1E1E",  # FONDO OSCURO
   limitsize = FALSE
 )
+
+library(magick)
+
+img <- image_read(output_file)
+
+nuevo_ancho <- 3840
+nuevo_alto <- 2160
+
+img_apretado <-image_resize(img,paste0(nuevo_ancho,"x",nuevo_alto,"!"))
+
+image_write(img_apretado,output_file)
 
 message("✅ MAPA OSCURO creado: ", output_file)
 message("📍 Municipios con presencia (filas en 'datos'): ", nrow(datos))

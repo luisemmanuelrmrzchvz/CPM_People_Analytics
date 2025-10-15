@@ -158,7 +158,7 @@ def create_indicator_section(fig, grid_spec, row, col, data, metric_name, subtit
     # Ajustar las proporciones para hacer los gráficos más pequeños
     subgrid = grid_spec[row:row+2, col*2:col*2+2].subgridspec(2, 2, hspace=0.25, wspace=0.20, 
                                                               height_ratios=[0.50, 0.50],  # Más equilibrio
-                                                              width_ratios=[0.48, 0.52])   # Menos ancho para gráficos
+                                                              width_ratios=[0.48, 0.52])    # Menos ancho para gráficos
     
     # Filtrar datos para la métrica
     metric_data = data[data["Concepto"] == metric_name].copy()
