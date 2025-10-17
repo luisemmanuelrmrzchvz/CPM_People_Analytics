@@ -1,6 +1,6 @@
 # ==============================
 # MAPA MUNICIPAL (MGI 2024) POR REGIONAL + PUNTOS DE PRESENCIA
-# Lee automáticamente 00mun.shp dentro de la carpeta Shapes (subcarpetas incluidas)
+# Incluye información de género y estados por regional
 # ==============================
 
 # Paquetes
@@ -81,7 +81,7 @@ if (!file.exists(paste0(base_no_ext, ".dbf")) || !file.exists(paste0(base_no_ext
 }
 
 # -----------------------------
-# 2) Extraer datos desde la base (tu consulta original)
+# 2) Extraer datos desde la base (CON GÉNERO)
 # -----------------------------
 con <- dbConnect(RSQLite::SQLite(), ruta_db)
 
@@ -91,7 +91,8 @@ WITH colaboradores_activos AS (
         id_colaborador,
         regional,
         estado,
-        municipio
+        municipio,
+        genero
     FROM hist_posiciones
     WHERE fecha_daily = DATE('now', 'start of month', '-1 day')
         AND status = 'A'
@@ -114,7 +115,9 @@ SELECT
     iu.cve_mun,
     iu.lat_decimal,
     iu.lon_decimal,
-    COUNT(DISTINCT ca.id_colaborador) AS colaboradores_activos
+    COUNT(DISTINCT ca.id_colaborador) AS colaboradores_activos,
+    SUM(CASE WHEN ca.genero = 'F' THEN 1 ELSE 0 END) AS mujeres,
+    SUM(CASE WHEN ca.genero = 'M' THEN 1 ELSE 0 END) AS hombres
 FROM colaboradores_activos ca
 LEFT JOIN inegi_unicos iu
     ON (ca.estado || '_' || ca.municipio) = (iu.estado_rhenueva || '_' || iu.municipio_rhenueva)
@@ -223,9 +226,8 @@ mapa_con_municipios <- ggplot() +
   geom_sf(data = puntos_municipios,
           aes(color = regional, size = colaboradores_activos),
           alpha = 0.95, shape = 19, stroke = 0.3) +
-  # destacar León si existe
+  # destacar León si existe (SOLO CÍRCULO AMARILLO, SIN TEXTO)
   { if (nrow(leon_gto) > 0) geom_sf(data = leon_gto, color = "#FFD700", size = 7, shape = 1, stroke = 2.2, inherit.aes = FALSE) } +
-  { if (nrow(leon_gto) > 0) geom_sf_text(data = leon_gto, aes(label = "CORPORATIVO\nLEÓN"), size = 5.5, fontface = "bold", color = "#FFD700", nudge_y = 0.4) } + # Texto dorado
   scale_fill_manual(values = colores_fill, na.value = "#2D2D2D", name = "Regional (municipio)") + # Fondo oscuro para municipios sin datos
   scale_color_manual(values = colores_regionales, na.value = "#606060", name = "Regional (puntos)") +
   scale_size_continuous(range = c(2, 10),
@@ -235,37 +237,57 @@ mapa_con_municipios <- ggplot() +
   theme_mapa_real() +
   labs(
     title = "PRESENCIA DE COLABORADORES EN MÉXICO",
-    subtitle = "Municipios pintados por Regional (fill suave) y ubicaciones puntuales"
+    subtitle = "Municipios pintados por Regional y ubicaciones puntuales"
   ) +
   coord_sf(xlim = c(-118, -86), ylim = c(14, 33), expand = FALSE) +
   theme(
     legend.position = "right",
     legend.box = "vertical",
-    legend.title = element_text(size = 14),
-    legend.text = element_text(size = 12)
+    # AUMENTAR TAMAÑO DE LAS LEYENDAS (150% más grandes)
+    legend.title = element_text(size = 16 * 1.5, face = "bold"),  # Títulos 150% más grandes
+    legend.text = element_text(size = 12 * 1.5),  # Texto 150% más grande
+    legend.key.size = unit(1.5, "cm"),  # Tamaño de los símbolos de la leyenda
+    legend.spacing.y = unit(0.8, "cm")  # Espaciado vertical entre elementos de leyenda
+  ) +
+  # AÑADIR ESTO PARA AUMENTAR EL TAMAÑO DE LOS SÍMBOLOS
+  guides(
+    color = guide_legend(
+      override.aes = list(size = 6)  # Aumenta el tamaño de los puntos en la leyenda de colores
+    ),
+    size = guide_legend(
+      override.aes = list(size = c(4, 6, 8, 10))  # Aumenta el tamaño de los puntos en la leyenda de tamaños
+    )
   )
 
 # -----------------------------
-# 7) Panel lateral de estadísticas CON FONDO OSCURO
+# 7) Panel lateral de estadísticas CON FONDO OSCURO (ACTUALIZADO)
 # -----------------------------
 resumen_regional <- datos %>%
   group_by(regional) %>%
   summarise(
     total_colaboradores = sum(colaboradores_activos),
     total_municipios = n_distinct(CVEGEO),
+    total_estados = n_distinct(cve_ent),
+    total_mujeres = sum(mujeres),
+    total_hombres = sum(hombres),
     .groups = 'drop'
   ) %>%
   mutate(
     porcentaje = round(total_colaboradores / sum(total_colaboradores) * 100, 1),
-    etiqueta = sprintf("%s\n%s colaboradores\n%s municipios",
+    porcentaje_mujeres = round(total_mujeres / total_colaboradores * 100, 1),
+    porcentaje_hombres = round(total_hombres / total_colaboradores * 100, 1),
+    etiqueta = sprintf("%s\n%s colaboradores\n%s municipios\n%s estados\n%.0f%% F, %.0f%% M",
                        regional,
                        format(total_colaboradores, big.mark = ","),
-                       total_municipios)
+                       total_municipios,
+                       total_estados,
+                       porcentaje_mujeres,
+                       porcentaje_hombres)
   )
 
 panel_estadisticas <- ggplot(resumen_regional, aes(x = 1, y = reorder(regional, total_colaboradores))) +
   geom_tile(aes(fill = regional), width = 0.25, height = 0.7, alpha = 0.95) +
-  geom_text(aes(label = etiqueta), hjust = 0, nudge_x = 0.3, size = 9,
+  geom_text(aes(label = etiqueta), hjust = 0, nudge_x = 0.3, size = 7,  # Reducido de 9 a 7 para acomodar más texto
             lineheight = 0.8, color = "#F5F5F5", fontface = "bold") + # Texto blanco
   scale_fill_manual(values = colores_regionales) +
   scale_x_continuous(limits = c(1, 8)) +
@@ -283,28 +305,18 @@ panel_estadisticas <- ggplot(resumen_regional, aes(x = 1, y = reorder(regional, 
 layout_final <- mapa_con_municipios + panel_estadisticas + plot_layout(widths = c(2, 1))
 
 output_file <- file.path(ruta_salida, "mapa_municipios_por_regional_OSCURO.png")
-
 ggsave(
   filename = output_file,
   plot = layout_final,
-  width = 5760/100,   # ancho en pulgadas (ajusta si quieres otra resolución) 3840
-  height = 2160/100,  # alto 2160
-  dpi = 100, # 300
+  width = 3840/100,   # ancho en pulgadas (ajusta si quieres otra resolución)
+  height = 2160/100,  # alto
+  dpi = 300,
   bg = "#1E1E1E",  # FONDO OSCURO
   limitsize = FALSE
 )
 
-library(magick)
-
-img <- image_read(output_file)
-
-nuevo_ancho <- 3840
-nuevo_alto <- 2160
-
-img_apretado <-image_resize(img,paste0(nuevo_ancho,"x",nuevo_alto,"!"))
-
-image_write(img_apretado,output_file)
-
 message("✅ MAPA OSCURO creado: ", output_file)
 message("📍 Municipios con presencia (filas en 'datos'): ", nrow(datos))
 message("👥 Total colaboradores (sum): ", sum(resumen_regional$total_colaboradores))
+message("👩 Total mujeres: ", sum(resumen_regional$total_mujeres))
+message("👨 Total hombres: ", sum(resumen_regional$total_hombres))
