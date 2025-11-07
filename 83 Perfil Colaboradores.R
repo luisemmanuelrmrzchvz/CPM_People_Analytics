@@ -228,12 +228,14 @@ rel_jefe_sub <- vectores %>%
   left_join(vectores, by = c('Id_Jefe' = 'ID_Colaborador'), suffix = c('_sub','_jefe')) %>%
   rowwise() %>%
   mutate(
-    distancia = distancia_vector(c_across(all_of(paste0(caracteristicas,'_sub'))), c_across(all_of(paste0(caracteristicas,'_jefe')))),
+    distancia = distancia_vector(c_across(all_of(paste0(caracteristicas,'_sub'))),
+                                 c_across(all_of(paste0(caracteristicas,'_jefe')))),
     distancia_norm = normalizar_distancia(distancia, num_features),
     tipo_relacion = 'Jefe-Subordinado'
   ) %>%
   ungroup() %>%
-  select(ID_Colaborador_sub = ID_Colaborador_sub, Id_Jefe, tipo_relacion, distancia, distancia_norm)
+  rename(ID_Colaborador_sub = ID_Colaborador) %>%  # 🔧 aquí está el cambio clave
+  select(ID_Colaborador_sub, Id_Jefe, tipo_relacion, distancia, distancia_norm)
 
 # 3c) Relación Subordinado -> Jefe (inversa) (por si quieres asimetría)
 rel_sub_jefe <- rel_jefe_sub %>%
@@ -419,76 +421,3 @@ plan(sequential)
 cat('\n=== PROCESO COMPLETADO ===\n')
 cat('Resumen guardado como:', archivo_salida, '\n')
 
-
-
-
-
-> # -----------------------------
-> # 3) CALCULAR RELACIONES Y BRECHAS
-  > # -----------------------------
-> cat('Calculando relaciones: jefe-subordinado, pares (departamento y puesto), subordinados...\n')
-Calculando relaciones: jefe-subordinado, pares (departamento y puesto), subordinados...
-> 
-  > # 3a) Subordinados por jefe (lista)
-  > subordinados_por_jefe <- vectores %>%
-  +   filter(!is.na(Id_Jefe) & Id_Jefe != '') %>%
-  +   group_by(Id_Jefe) %>%
-  +   summarise(ids_subordinados = list(ID_Colaborador), .groups = 'drop')
-> 
-  > # 3b) Relaciones Jefe -> Sub
-  > rel_jefe_sub <- vectores %>%
-  +   filter(!is.na(Id_Jefe) & Id_Jefe != '') %>%
-  +   left_join(vectores, by = c('Id_Jefe' = 'ID_Colaborador'), suffix = c('_sub','_jefe')) %>%
-  +   rowwise() %>%
-  +   mutate(
-    +     distancia = distancia_vector(c_across(all_of(paste0(caracteristicas,'_sub'))), c_across(all_of(paste0(caracteristicas,'_jefe')))),
-    +     distancia_norm = normalizar_distancia(distancia, num_features),
-    +     tipo_relacion = 'Jefe-Subordinado'
-    +   ) %>%
-  +   ungroup() %>%
-  +   select(ID_Colaborador_sub = ID_Colaborador_sub, Id_Jefe, tipo_relacion, distancia, distancia_norm)
-Error in `select()`:
-  ! Can't select columns that don't exist.
-✖ Column `ID_Colaborador_sub` doesn't exist.
-Run `rlang::last_trace()` to see where the error occurred.
-
-> rlang::last_trace()
-<error/vctrs_error_subscript_oob>
-Error in `select()`:
-! Can't select columns that don't exist.
-✖ Column `ID_Colaborador_sub` doesn't exist.
----
-  Backtrace:
-  ▆
-1. ├─... %>% ...
-2. ├─dplyr::select(...)
-3. └─dplyr:::select.data.frame(...)
-Run rlang::last_trace(drop = FALSE) to see 17 hidden frames.
-> rlang::last_trace(drop = FALSE)
-<error/vctrs_error_subscript_oob>
-  Error in `select()`:
-  ! Can't select columns that don't exist.
-✖ Column `ID_Colaborador_sub` doesn't exist.
----
-Backtrace:
-     ▆
-  1. ├─... %>% ...
-  2. ├─dplyr::select(...)
-  3. ├─dplyr:::select.data.frame(...)
-  4. │ └─tidyselect::eval_select(expr(c(...)), data = .data, error_call = error_call)
-  5. │   └─tidyselect:::eval_select_impl(...)
-  6. │     ├─tidyselect:::with_subscript_errors(...)
-  7. │     │ └─base::withCallingHandlers(...)
-  8. │     └─tidyselect:::vars_select_eval(...)
-  9. │       └─tidyselect:::walk_data_tree(expr, data_mask, context_mask)
- 10. │         └─tidyselect:::eval_c(expr, data_mask, context_mask)
- 11. │           └─tidyselect:::reduce_sels(node, data_mask, context_mask, init = init)
- 12. │             └─tidyselect:::walk_data_tree(new, data_mask, context_mask)
- 13. │               └─tidyselect:::as_indices_sel_impl(...)
- 14. │                 └─tidyselect:::as_indices_impl(...)
- 15. │                   └─tidyselect:::chr_as_locations(x, vars, call = call, arg = arg)
- 16. │                     └─vctrs::vec_as_location(...)
- 17. └─vctrs (local) `<fn>`()
- 18.   └─vctrs:::stop_subscript_oob(...)
- 19.     └─vctrs:::stop_subscript(...)
- 20.       └─rlang::abort(...)
