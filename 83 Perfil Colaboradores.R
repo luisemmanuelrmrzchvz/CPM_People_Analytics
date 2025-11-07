@@ -244,22 +244,26 @@ rel_sub_jefe <- rel_jefe_sub %>%
   select(ID_Colaborador, ID_Contra, tipo_relacion = tipo_relacion, distancia, distancia_norm) %>%
   mutate(tipo_relacion = 'Subordinado-Jefe')
 
-# 3d) Pares por Departamento (mismo Nivel 3)
-rel_pares_depto <- vectores %>%
-  group_by(Nivel3) %>%
-  filter(n() > 1) %>%
-  group_modify(~{
-    ids <- .x$ID_Colaborador
-    combos <- t(combn(ids, 2))
-    map_dfr(1:nrow(combos), function(i) {
-      id1 <- combos[i,1]; id2 <- combos[i,2]
-      v1 <- .x[.x$ID_Colaborador == id1, caracteristicas] %>% unlist()
-      v2 <- .x[.x$ID_Colaborador == id2, caracteristicas] %>% unlist()
-      d <- distancia_vector(v1, v2)
-      dn <- normalizar_distancia(d, num_features)
-      tibble(ID_1 = id1, ID_2 = id2, tipo_relacion = 'Pares_Departamento', distancia = d, distancia_norm = dn)
-    })
-  }) %>% ungroup()
+# 3d) Brechas entre pares por departamento (versión optimizada)
+cat('Calculando brechas promedio por departamento y puesto...\n')
+
+# Calcular vector promedio por grupo
+vectores_promedio <- vectores %>%
+  group_by(Nivel_3, Puesto_Generico) %>%
+  summarise(across(all_of(caracteristicas), mean, na.rm = TRUE), .groups = 'drop')
+
+# Calcular distancia de cada colaborador respecto al promedio del grupo
+rel_pares <- vectores %>%
+  left_join(vectores_promedio, by = c('Nivel_3','Puesto_Generico'), suffix = c('', '_prom')) %>%
+  rowwise() %>%
+  mutate(
+    distancia = distancia_vector(c_across(all_of(caracteristicas)),
+                                 c_across(all_of(paste0(caracteristicas,'_prom')))),
+    distancia_norm = normalizar_distancia(distancia, num_features),
+    tipo_relacion = 'Pares-Depto/Puesto'
+  ) %>%
+  ungroup() %>%
+  select(ID_Colaborador, Nivel_3, Puesto_Generico, tipo_relacion, distancia, distancia_norm)
 
 # 3e) Pares por Puesto (mismo Puesto_Generico)
 rel_pares_puesto <- vectores %>%
