@@ -136,6 +136,20 @@ def format_number(value, is_integer=False, use_k=False):
     except:
         return str(value)
 
+# Mapeo de nombres para mostrar
+name_mapping = {
+    "Membresía_Socios": "Membresía (socios)",
+    "Cartera_Total": "Cartera total",
+    "Cartera_Vencida": "Cartera vencida",
+    "EPRC_Gasto": "EPRC Gasto",
+    "Captación_Tradicional": "Captación tradicional",
+    "Recuperación_de_Cartera_Eliminada": "Recuperación de cartera eliminada",
+    "Ingresos_Financieros": "Ingresos financieros",
+    "Gastos_Financieros": "Gastos financieros",
+    "Gtos_Admón_y_Prom": "Gtos. Admón. y Prom.",
+    "Remanente": "Remanente"
+}
+
 # Grupos de indicadores según especificación
 indicator_groups = {
     "CRECIMIENTO DE LA COOPERATIVA": ["Membresía_Socios", "Captación_Tradicional"],
@@ -184,9 +198,9 @@ def create_indicator_section(fig, grid_spec, row, col, data, metric_name, subtit
     else:
         percentage = 0
     
-    # Crear velocímetro minimalista (con semaforización invertida si corresponde)
-    is_inverted = metric_name in special_calculation_metrics
-    create_minimal_gauge(ax_gauge, percentage, metric_name, is_inverted)
+    # Crear velocímetro minimalista (con semaforización especial para Cartera_Vencida y EPRC_Gasto)
+    is_special_metric = metric_name in special_calculation_metrics
+    create_minimal_gauge(ax_gauge, percentage, metric_name, is_special_metric)
     
     # --- CUADRO 2: Datos acumulados (superior derecho) ---
     ax_data = fig.add_subplot(subgrid[0, 1])
@@ -202,23 +216,19 @@ def create_indicator_section(fig, grid_spec, row, col, data, metric_name, subtit
         sum_real_mensual = 0
         sum_meta_mensual = 0
     
-    # Determinar si usar formato "k" para miles (excepto Membresía)
-    use_k_format = metric_name != "Membresía_Socios"
-    
-    display_real = sum_real_mensual / 1000 if use_k_format else sum_real_mensual
-    display_meta = sum_meta_mensual / 1000 if use_k_format else sum_meta_mensual
-    
-    unit = "k" if use_k_format else ""
+    # CAMBIO 1: Mostrar cantidades completas sin formato de miles para Real Acumulado y Meta Acumulada
+    display_real = sum_real_mensual
+    display_meta = sum_meta_mensual
     
     ax_data.text(0.5, 0.7, "REAL ACUMULADO", ha="center", va="center", 
-                fontsize=26, fontweight="bold", color=colors["text"], alpha=0.8)  # Fuente un poco más grande
-    ax_data.text(0.5, 0.5, f"{format_number(display_real, use_k=False)}{unit}", ha="center", va="center", 
-                fontsize=38, fontweight="bold", color=colors["success"])  # Fuente más grande
+                fontsize=26, fontweight="bold", color=colors["text"], alpha=0.8)
+    ax_data.text(0.5, 0.5, f"{format_number(display_real, is_integer=True, use_k=False)}", ha="center", va="center", 
+                fontsize=38, fontweight="bold", color=colors["success"])
     
     ax_data.text(0.5, 0.3, "META ACUMULADA", ha="center", va="center", 
-                fontsize=26, fontweight="bold", color=colors["text"], alpha=0.8)  # Fuente más grande
-    ax_data.text(0.5, 0.1, f"{format_number(display_meta, use_k=False)}{unit}", ha="center", va="center", 
-                fontsize=38, fontweight="bold", color=colors["primary"])  # Fuente más grande
+                fontsize=26, fontweight="bold", color=colors["text"], alpha=0.8)
+    ax_data.text(0.5, 0.1, f"{format_number(display_meta, is_integer=True, use_k=False)}", ha="center", va="center", 
+                fontsize=38, fontweight="bold", color=colors["primary"])
     
     ax_data.set_xlim(0, 1)
     ax_data.set_ylim(0, 1)
@@ -231,8 +241,8 @@ def create_indicator_section(fig, grid_spec, row, col, data, metric_name, subtit
     
     return ax_gauge, ax_data, ax_trend
 
-# Función para crear velocímetro minimalista con semaforización opcional invertida
-def create_minimal_gauge(ax, value, title, is_inverted=False):
+# Función para crear velocímetro minimalista con semaforización especial
+def create_minimal_gauge(ax, value, title, is_special_metric=False):
     # Limitar valor para display entre -200% y 200%
     display_value = max(-200, min(value, 200))
     
@@ -242,15 +252,15 @@ def create_minimal_gauge(ax, value, title, is_inverted=False):
     x = r * np.cos(theta)
     y = r * np.sin(theta)
     
-    # Color basado en desempeño (invertido para ciertos indicadores)
-    if is_inverted:
-        # Semaforización invertida: verde debajo de 100%, rojo arriba de 100%
-        if value <= 100:
-            gauge_color = colors["success"]  # Bueno
+    # CAMBIO 3: Semaforización especial para Cartera_Vencida y EPRC_Gasto
+    if is_special_metric:
+        # Para estas métricas: < 0% = rojo, >= 0% = verde
+        if value < 0:
+            gauge_color = colors["accent"]   # Rojo
         else:
-            gauge_color = colors["accent"]   # Malo
+            gauge_color = colors["success"]  # Verde
     else:
-        # Semaforización normal: verde arriba de 100%, rojo debajo de 80%
+        # Semaforización normal: verde arriba de 100%, amarillo entre 80-99%, rojo debajo de 80%
         if value >= 100:
             gauge_color = colors["success"]
         elif value >= 80:
@@ -272,9 +282,9 @@ def create_minimal_gauge(ax, value, title, is_inverted=False):
     ax.text(0, -0.2, f"{value:.0f}%", ha="center", va="center", 
             fontsize=42, fontweight="bold", color=colors["text"])
     
-    # Título abreviado
-    short_title = title.split(" ")[0] if len(title.split(" ")) > 0 else title
-    ax.text(0, -0.4, short_title, ha="center", va="center", 
+    # CAMBIO 2: Usar nombre mapeado sin guiones bajos
+    display_name = name_mapping.get(title, title)
+    ax.text(0, -0.4, display_name, ha="center", va="center", 
             fontsize=28, fontweight="bold", color=colors["text"], alpha=0.8)
     
     ax.set_xlim(-1, 1)
@@ -358,9 +368,9 @@ def create_trend_chart(ax, metric_data, metric_name):
     
     # Configuración del eje izquierdo (volúmenes) - usar formato adaptativo
     ax.set_xticks(x)
-    ax.set_xticklabels(months, fontsize=22, fontweight="bold")  # Fuente más grande
+    ax.set_xticklabels(months, fontsize=22, fontweight="bold")
     ax.set_ylim(volume_min, volume_max)
-    ax.tick_params(axis="y", labelsize=18, colors=colors["success"])  # Fuente más grande
+    ax.tick_params(axis="y", labelsize=18, colors=colors["success"])
     
     # Formateador personalizado para usar "k", "M" y comas mexicanas
     def volume_formatter(x, p):
@@ -377,12 +387,12 @@ def create_trend_chart(ax, metric_data, metric_name):
     
     # Configuración del eje derecho (porcentajes) - CORRECCIÓN: valores ya están en porcentaje
     ax2.set_ylim(alcance_min, alcance_max)
-    ax2.tick_params(axis="y", labelsize=18, colors=colors["warning"])  # Fuente más grande
+    ax2.tick_params(axis="y", labelsize=18, colors=colors["warning"])
     # CORRECCIÓN: No multiplicar por 100, ya están en porcentaje
     ax2.yaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda x, p: f"{x:.0f}%"))
     
     # Ajustar posición de los ticks del eje derecho para separar la línea - MÁS SEPARACIÓN
-    ax2.spines["right"].set_position(("outward", 25))  # Más separación para evitar empalmes
+    ax2.spines["right"].set_position(("outward", 25))
     
     # Quitar bordes y grid
     for spine in ax.spines.values():
@@ -396,8 +406,8 @@ def create_trend_chart(ax, metric_data, metric_name):
 # Función para crear faldón/chyron de leyendas en la parte inferior (sin superponer)
 def create_legend_chyron(fig, grid_spec):
     ax_legend = fig.add_subplot(grid_spec[2, :])
-    ax_legend.set_facecolor("#3D3D3D")  # Fondo gris medio oscuro para el chyron
-    ax_legend.set_position([0.1, 0.02, 0.8, 0.06])  # Posición fija en la parte inferior
+    ax_legend.set_facecolor("#3D3D3D")
+    ax_legend.set_position([0.1, 0.02, 0.8, 0.06])
     
     # Leyendas con texto oscuro para mejor contraste
     legend_elements = [
@@ -414,7 +424,7 @@ def create_legend_chyron(fig, grid_spec):
         x_pos = (i + 0.5) * element_width
         # Círculo de color
         ax_legend.plot(x_pos - 0.05, 0.5, "o", markersize=20, color=element["color"])
-        # Texto de la leyenda - ahora en color oscuro
+        # Texto de la leyenda
         ax_legend.text(x_pos + 0.02, 0.5, element["label"], ha="left", va="center",
                       fontsize=24, fontweight="bold", color=colors["chyron_text"])
     
@@ -436,18 +446,15 @@ for group_name, metrics in indicator_groups.items():
     fig = plt.figure(figsize=(38.4, 21.6), facecolor=colors["background"])
     
     # Definir grid: 3 filas con más espacio para contenido y leyenda separada
-    # Aumentar el espacio horizontal entre los dos indicadores
-    gs = fig.add_gridspec(3, 4, height_ratios=[0.10, 0.75, 0.15], hspace=0.20, wspace=0.40)  # Más espacio entre gráficos
+    gs = fig.add_gridspec(3, 4, height_ratios=[0.10, 0.75, 0.15], hspace=0.20, wspace=0.40)
     
-    # --- FILA 0: TÍTULO Y SUBTÍTULO ---
+    # --- FILA 0: SOLO TÍTULO (sin subtítulo) ---
     ax_title = fig.add_subplot(gs[0, :])
     ax_title.set_facecolor(colors["background"])
     
-    ax_title.text(0.5, 0.7, "INDICADORES DE ALINEACIÓN", ha="center", va="center",
+    # CAMBIO 4: Solo mostrar el título, omitir el subtítulo
+    ax_title.text(0.5, 0.5, "INDICADORES DE ALINEACIÓN", ha="center", va="center",
                  fontsize=48, fontweight="bold", color=colors["text"])
-    
-    ax_title.text(0.5, 0.3, group_name, ha="center", va="center",
-                 fontsize=36, fontweight="bold", color=colors["primary"])
     
     ax_title.set_xlim(0, 1)
     ax_title.set_ylim(0, 1)
@@ -467,7 +474,7 @@ for group_name, metrics in indicator_groups.items():
     output_dir = r"C:\\Users\\racl26345\\Documents\\Reportes Automatizados\\Observatorio Digital"
     os.makedirs(output_dir, exist_ok=True)
     
-    # Nombre de archivo basado en el grupo
+    # Nombre de archivo basado en el grupo (mantener el nombre original con el subtítulo)
     group_slug = group_name.replace(" ", "_").replace("Ó", "O").replace("É", "E")
     output_path = os.path.join(output_dir, f"Videowall_{group_slug}_{current_date}_4K.png")
     

@@ -287,7 +287,7 @@ resumen_regional <- datos %>%
 
 panel_estadisticas <- ggplot(resumen_regional, aes(x = 1, y = reorder(regional, total_colaboradores))) +
   geom_tile(aes(fill = regional), width = 0.25, height = 0.7, alpha = 0.95) +
-  geom_text(aes(label = etiqueta), hjust = 0, nudge_x = 0.3, size = 7,  # Reducido de 9 a 7 para acomodar más texto
+  geom_text(aes(label = etiqueta), hjust = 0, nudge_x = 0.3, size = 10.5,  # Reducido de 9 a 7 para acomodar más texto
             lineheight = 0.8, color = "#F5F5F5", fontface = "bold") + # Texto blanco
   scale_fill_manual(values = colores_regionales) +
   scale_x_continuous(limits = c(1, 8)) +

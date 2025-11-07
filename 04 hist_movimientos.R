@@ -14,7 +14,7 @@ datos <- read_excel(archivo_excel, skip = 1, col_names = FALSE)
 columnas_fecha <- c(5, 6, 13, 17, 18, 19, 27, 62)
 
 # Convertir las columnas seleccionadas a formato de fecha "YYYY-MM-DD"
-for (col in columnas_fecha) {
+for (col in columnas_fecha) { 
   datos[[col]] <- format(as.Date(datos[[col]], origin = "1899-12-30"), "%Y-%m-%d")
 }
 
