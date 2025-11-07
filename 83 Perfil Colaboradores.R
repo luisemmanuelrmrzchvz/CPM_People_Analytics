@@ -615,3 +615,36 @@ cat("Archivos guardados en:", dir_output, "\n")
 
 # Limpiar procesamiento paralelo
 plan(sequential)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+> # =============================================================================
+> # 7. EJECUCIÓN PRINCIPAL OPTIMIZADA
+  > # =============================================================================
+> 
+  > cat("Iniciando análisis optimizado...\n")
+Iniciando análisis optimizado...
+> 
+  > # Calcular matches (en paralelo)
+  > resultados_360 <- calcular_match_360_rapido(datos_clean)
+Calculando matches 360° (optimizado)...
+Error en (function (.x, .f, ..., .progress = FALSE) : 
+            ℹ In index: 1.
+          Caused by error in `map_dbl()`:
+            ℹ In index: 3.
+          Caused by error in `if (p1$Estado_Civil == p2$Estado_Civil) ...`:
+            ! valor ausente donde TRUE/FALSE es necesario
+          Called from: value.list(futures)
+          Browse[1]> 
