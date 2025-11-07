@@ -249,7 +249,7 @@ cat('Calculando brechas promedio por departamento y puesto...\n')
 
 # Calcular vector promedio por grupo
 vectores_promedio <- vectores %>%
-  group_by(Nivel_3, Puesto_Generico) %>%
+  group_by(`Nivel 3`, Puesto_Generico) %>%
   summarise(across(all_of(caracteristicas), mean, na.rm = TRUE), .groups = 'drop')
 
 # Calcular distancia de cada colaborador respecto al promedio del grupo
