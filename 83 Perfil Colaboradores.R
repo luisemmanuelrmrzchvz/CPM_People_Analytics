@@ -125,8 +125,8 @@ datos <- datos %>%
 vars_para_imputar <- c('Género', 'Estado_Civil', 'Nivel_Estudios', 'Área_Estudios', 'Perfil_Profesional_Puesto')
 
 modas_por_depto <- datos %>%
-  filter(!is.na(`Nivel 3`)) %>%
-  group_by(`Nivel 3`) %>%
+  filter(!is.na('Nivel 3')) %>%
+  group_by('Nivel 3') %>%
   summarise(across(all_of(vars_para_imputar), ~ calcular_moda(.x), .names = 'moda_{col}'), .groups = 'drop')
 
 # modas globales (fallback)
