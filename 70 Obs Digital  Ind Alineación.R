@@ -113,26 +113,27 @@ colors = {
 special_calculation_metrics = ["Cartera_Vencida", "EPRC_Gasto"]
 
 # Función para formatear números con comas para miles (formato México)
-def format_number(value, is_integer=False, use_k=False):
+def format_number(value, is_currency=False, is_percentage=False, is_integer=False):
     try:
         if pd.isna(value):
             return "0"
         
-        if use_k and abs(value) >= 1000:
-            # Convertir a miles con "k"
-            value_k = value / 1000
-            if abs(value_k) >= 1000:
-                # Si es millones, usar M
-                value_m = value_k / 1000
-                return f"{value_m:,.1f}M".replace(",", "X").replace(".", ",").replace("X", ".")
-            else:
-                return f"{value_k:,.1f}k".replace(",", "X").replace(".", ",").replace("X", ".")
+        # Para porcentajes, mostrar decimales
+        if is_percentage:
+            return f"{value:,.1f}%".replace(",", "X").replace(".", ",").replace("X", ".")
+        
+        # Para enteros o valores sin decimales
+        if is_integer or abs(value - round(value)) < 0.001:
+            formatted = f"{value:,.0f}".replace(",", "X").replace(".", ",").replace("X", ".")
         else:
-            # Formato normal con comas para miles
-            if is_integer or abs(value - round(value)) < 0.001:
-                return f"{value:,.0f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            else:
-                return f"{value:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            formatted = f"{value:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        
+        # Agregar signo de peso si es moneda
+        if is_currency:
+            return f"${formatted}"
+        else:
+            return formatted
+            
     except:
         return str(value)
 
@@ -149,6 +150,10 @@ name_mapping = {
     "Gtos_Admón_y_Prom": "Gtos. Admón. y Prom.",
     "Remanente": "Remanente"
 }
+
+# Determinar si un indicador usa formato de moneda
+def is_currency_metric(metric_name):
+    return metric_name != "Membresía_Socios"
 
 # Grupos de indicadores según especificación
 indicator_groups = {
@@ -216,18 +221,21 @@ def create_indicator_section(fig, grid_spec, row, col, data, metric_name, subtit
         sum_real_mensual = 0
         sum_meta_mensual = 0
     
-    # CAMBIO 1: Mostrar cantidades completas sin formato de miles para Real Acumulado y Meta Acumulada
-    display_real = sum_real_mensual
-    display_meta = sum_meta_mensual
+    # Determinar si es moneda
+    use_currency_format = is_currency_metric(metric_name)
+    
+    # Formatear números según el tipo de indicador
+    display_real = format_number(sum_real_mensual, is_currency=use_currency_format, is_integer=True)
+    display_meta = format_number(sum_meta_mensual, is_currency=use_currency_format, is_integer=True)
     
     ax_data.text(0.5, 0.7, "REAL ACUMULADO", ha="center", va="center", 
                 fontsize=26, fontweight="bold", color=colors["text"], alpha=0.8)
-    ax_data.text(0.5, 0.5, f"{format_number(display_real, is_integer=True, use_k=False)}", ha="center", va="center", 
+    ax_data.text(0.5, 0.5, f"{display_real}", ha="center", va="center", 
                 fontsize=38, fontweight="bold", color=colors["success"])
     
     ax_data.text(0.5, 0.3, "META ACUMULADA", ha="center", va="center", 
                 fontsize=26, fontweight="bold", color=colors["text"], alpha=0.8)
-    ax_data.text(0.5, 0.1, f"{format_number(display_meta, is_integer=True, use_k=False)}", ha="center", va="center", 
+    ax_data.text(0.5, 0.1, f"{display_meta}", ha="center", va="center", 
                 fontsize=38, fontweight="bold", color=colors["primary"])
     
     ax_data.set_xlim(0, 1)
@@ -257,16 +265,21 @@ def create_minimal_gauge(ax, value, title, is_special_metric=False):
         # Para estas métricas: < 0% = rojo, >= 0% = verde
         if value < 0:
             gauge_color = colors["accent"]   # Rojo
+            range_text = "Rango: < 0% (Rojo)"
         else:
             gauge_color = colors["success"]  # Verde
+            range_text = "Rango: ≥ 0% (Verde)"
     else:
         # Semaforización normal: verde arriba de 100%, amarillo entre 80-99%, rojo debajo de 80%
         if value >= 100:
             gauge_color = colors["success"]
+            range_text = "Rango: ≥ 100% (Verde)"
         elif value >= 80:
             gauge_color = colors["warning"]
+            range_text = "Rango: 80-99% (Amarillo)"
         else:
             gauge_color = colors["accent"]
+            range_text = "Rango: < 80% (Rojo)"
     
     ax.fill_betweenx(y, 0, x, color=gauge_color, alpha=0.8)
     
@@ -287,8 +300,12 @@ def create_minimal_gauge(ax, value, title, is_special_metric=False):
     ax.text(0, -0.4, display_name, ha="center", va="center", 
             fontsize=28, fontweight="bold", color=colors["text"], alpha=0.8)
     
+    # AGREGAR: Nota de rango de color
+    ax.text(0, -0.65, range_text, ha="center", va="center", 
+            fontsize=16, color=colors["light_text"], alpha=0.8)
+    
     ax.set_xlim(-1, 1)
-    ax.set_ylim(-0.5, 1)
+    ax.set_ylim(-0.7, 1)
     ax.set_aspect("equal")
     ax.axis("off")
 
@@ -297,111 +314,82 @@ def create_trend_chart(ax, metric_data, metric_name):
     # Los datos ya vienen filtrados y ordenados por fecha
     
     # Preparar datos - usar los valores mensuales directamente
-    months = metric_data["Fecha"].dt.strftime("%b")
+    # CAMBIO: Formato de fecha con mes y año (ej: "Ene-25")
+    metric_data["Mes_Año"] = metric_data["Fecha"].dt.strftime("%b-%y")
+    months = metric_data["Mes_Año"]
     real_values = metric_data["Real_Mensual"]
     meta_values = metric_data["Meta_Mensual"]
     
-    # CORRECCIÓN: Usar Alcance Acumulado directamente (ya está en porcentaje, no dividir entre 100)
-    alcance_values = metric_data["Alcance_Acumulado"]
-    
     x = np.arange(len(months))
     
-    # Crear eje secundario para porcentajes
-    ax2 = ax.twinx()
+    # Determinar escala apropiada y etiqueta del eje Y
+    max_value = max(max(real_values) if len(real_values) > 0 else 0, 
+                   max(meta_values) if len(meta_values) > 0 else 0)
     
-    # Configurar límites del eje izquierdo (volúmenes) - adaptable con márgenes
-    all_volume_values = np.concatenate([real_values, meta_values])
+    # Determinar si es moneda para la etiqueta
+    use_currency_format = is_currency_metric(metric_name)
+    display_name = name_mapping.get(metric_name, metric_name)
     
-    # Permitir valores negativos y calcular límites adaptativos
-    if len(all_volume_values) > 0:
-        volume_min = min(all_volume_values)
-        volume_max = max(all_volume_values)
-        
-        # Añadir margen del 15%
-        margin = (volume_max - volume_min) * 0.15 if volume_max != volume_min else abs(volume_max) * 0.15
-        
-        # Si hay valores negativos, ajustar el mínimo; si no, empezar desde 0 o un poco negativo
-        if volume_min >= 0:
-            volume_min = max(0, volume_min - margin)
-        else:
-            volume_min = volume_min - margin
-        
-        volume_max = volume_max + margin
+    # Determinar escala (miles o millones) y factor de división
+    if max_value >= 1000000:
+        scale_factor = 1000000
+        scale_label = "Millones"
+        real_values_scaled = real_values / scale_factor
+        meta_values_scaled = meta_values / scale_factor
+    elif max_value >= 1000:
+        scale_factor = 1000
+        scale_label = "Miles"
+        real_values_scaled = real_values / scale_factor
+        meta_values_scaled = meta_values / scale_factor
     else:
-        volume_min = 0
-        volume_max = 1
+        scale_factor = 1
+        scale_label = ""
+        real_values_scaled = real_values
+        meta_values_scaled = meta_values
     
-    # CORRECCIÓN: ELIMINAR RESTRICCIONES - ajustar eje derecho basado en los datos sin límites fijos
-    if len(alcance_values) > 0:
-        # Calcular límites basados en los datos con un margen del 20%
-        alcance_min = min(alcance_values)
-        alcance_max = max(alcance_values)
-        
-        # Añadir margen del 20% a ambos lados
-        alcance_range = alcance_max - alcance_min
-        if alcance_range > 0:
-            margin = alcance_range * 0.2
-            alcance_min = alcance_min - margin
-            alcance_max = alcance_max + margin
-        else:
-            # Si no hay variación, crear un rango mínimo
-            alcance_min = alcance_min - 10
-            alcance_max = alcance_max + 10
+    # Crear etiqueta del eje Y
+    if use_currency_format:
+        ylabel = f"Monto de {display_name} (en {scale_label})" if scale_label else f"Monto de {display_name}"
     else:
-        alcance_min = 0
-        alcance_max = 100
+        ylabel = f"{display_name} (en {scale_label})" if scale_label else f"{display_name}"
     
     # Barras más estrechas para evitar superposición
-    width = 0.25
-    bars_real = ax.bar(x - width/2, real_values, width, color=colors["success"], alpha=0.9, label="Real Mensual")
-    bars_meta = ax.bar(x + width/2, meta_values, width, color=colors["primary"], alpha=0.7, label="Meta Mensual")
+    width = 0.35
+    bars_real = ax.bar(x - width/2, real_values_scaled, width, color=colors["success"], alpha=0.9, label="Real Mensual")
+    bars_meta = ax.bar(x + width/2, meta_values_scaled, width, color=colors["primary"], alpha=0.7, label="Meta Mensual")
     
-    # Línea de tendencia acumulada en eje derecho (Alcance Acumulado)
-    if len(x) > 2:
-        x_smooth = np.linspace(x.min(), x.max(), 100)
-        spl = make_interp_spline(x, alcance_values, k=2)
-        y_smooth = spl(x_smooth)
-        line = ax2.plot(x_smooth, y_smooth, color=colors["warning"], linewidth=6, label="Acumulado %")
-    else:
-        line = ax2.plot(x, alcance_values, color=colors["warning"], linewidth=6, marker="o", 
-                       markersize=12, label="Acumulado %")
-    
-    # Configuración del eje izquierdo (volúmenes) - usar formato adaptativo
+    # Configuración del eje izquierdo (volúmenes)
     ax.set_xticks(x)
     ax.set_xticklabels(months, fontsize=22, fontweight="bold")
-    ax.set_ylim(volume_min, volume_max)
+    
+    # Configurar límites del eje Y
+    all_scaled_values = np.concatenate([real_values_scaled, meta_values_scaled])
+    if len(all_scaled_values) > 0:
+        y_min = min(all_scaled_values)
+        y_max = max(all_scaled_values)
+        margin = (y_max - y_min) * 0.15 if y_max != y_min else abs(y_max) * 0.15
+        ax.set_ylim(max(0, y_min - margin) if y_min >= 0 else y_min - margin, y_max + margin)
+    
     ax.tick_params(axis="y", labelsize=18, colors=colors["success"])
     
-    # Formateador personalizado para usar "k", "M" y comas mexicanas
+    # Formateador personalizado para usar comas mexicanas sin sufijos K/M
     def volume_formatter(x, p):
         if x == 0:
             return "0"
-        elif abs(x) >= 1000000:
-            return f"{x/1000000:,.1f}M".replace(",", "X").replace(".", ",").replace("X", ".")
-        elif abs(x) >= 1000:
-            return f"{x/1000:,.0f}k".replace(",", "X").replace(".", ",").replace("X", ".")
         else:
+            # Formato con comas para miles y punto para decimales
             return f"{x:,.0f}".replace(",", "X").replace(".", ",").replace("X", ".")
     
     ax.yaxis.set_major_formatter(mpl.ticker.FuncFormatter(volume_formatter))
     
-    # Configuración del eje derecho (porcentajes) - CORRECCIÓN: valores ya están en porcentaje
-    ax2.set_ylim(alcance_min, alcance_max)
-    ax2.tick_params(axis="y", labelsize=18, colors=colors["warning"])
-    # CORRECCIÓN: No multiplicar por 100, ya están en porcentaje
-    ax2.yaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda x, p: f"{x:.0f}%"))
-    
-    # Ajustar posición de los ticks del eje derecho para separar la línea - MÁS SEPARACIÓN
-    ax2.spines["right"].set_position(("outward", 25))
+    # Establecer etiqueta del eje Y
+    ax.set_ylabel(ylabel, fontsize=24, color=colors["success"], fontweight="bold", labelpad=20)
     
     # Quitar bordes y grid
     for spine in ax.spines.values():
         spine.set_visible(False)
-    for spine in ax2.spines.values():
-        spine.set_visible(False)
     
     ax.grid(True, alpha=0.1, axis="y")
-    ax2.grid(False)
 
 # Función para crear faldón/chyron de leyendas en la parte inferior (sin superponer)
 def create_legend_chyron(fig, grid_spec):
@@ -412,8 +400,7 @@ def create_legend_chyron(fig, grid_spec):
     # Leyendas con texto oscuro para mejor contraste
     legend_elements = [
         {"color": colors["primary"], "label": "META MENSUAL"},
-        {"color": colors["success"], "label": "REAL MENSUAL"}, 
-        {"color": colors["warning"], "label": "ACUMULADO %"}
+        {"color": colors["success"], "label": "REAL MENSUAL"}
     ]
     
     # Calcular posiciones equitativas
