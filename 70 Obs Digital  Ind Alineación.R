@@ -481,3 +481,54 @@ print("Proceso completado: Se crearon 5 imágenes para videowall")
 ')
 
 cat("¡Proceso completado exitosamente a las", format(Sys.time(), "%H:%M:%S"), "\n")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
++ # Intentamos setear locale (no estrictamente necesario para el formateo que implementamos)
+  + try:
+  +     locale.setlocale(locale.LC_ALL, "es_MX.UTF-8")
++ except:
+  +     try:
+  +         locale.setlocale(locale.LC_ALL, "Spanish_Mexico.1252")
++     except:
+  +         try:
+  +             locale.setlocale(locale.LC_ALL, "es_ES.UTF-8")
++         except:
+  +             pass
++ 
+  + # Usar los datos pasados desde R
+  + data = data_r
++ 
+  + print("Datos recibidos desde R:")
++ print(f"Dimensiones: {data.shape}")
++ print(f"Métricas: {list(data['Concepto'].unique())}")
+Error: unexpected symbol in:
+  "print(f"Dimensiones: {data.shape}")
+print(f"Métricas: {list(data['Concepto"
