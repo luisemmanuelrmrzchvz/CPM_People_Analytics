@@ -332,3 +332,127 @@ main <- function() {
 
 # Ejecutar
 main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+###############################################################################################
+###############################################################################################
+###############################################################################################
+###############################################################################################
+###############################################################################################
+###############################################################################################
+###############################################################################################
+
+
+SELECT 
+actual.id_colaborador,
+actual.nombre as nombre_colaborador,
+actual.id_posicion as id_posicion_nuevo,
+actual.nombre_puesto as nombre_puesto_nuevo,
+actual.nivel_gestion as nivel_gestion_nuevo,
+actual.fecha_efectiva_movimiento as fecha_efectiva_nueva,
+actual.evento_asociado as razon_evento_nuevo,
+actual.razon_evento as evento_asociado_nueva,
+actual.posicion_regional as regional_nueva,
+actual.posicion_plaza as plaza_nueva,
+actual.posicion_estado as  estado_nuevo,
+actual.posicion_municipio as municipio_nuevo,
+actual.posicion_localidad as localidad_nueva,
+actual.posicion_ubicacion as posicion_ubicacion_nueva,
+actual.id_centro_costos as id_centro_costos_nuevo,
+actual.posicion_centro_costos as posicion_centro_costos_nuevo,
+actual.puesto_generico as puesto_generico_nuevo,
+actual.tabulador_salarial as tabulador_salarial_nuevo,
+actual.familia_puestos as familia_puestos_nuevo,
+actual.modalidad_puesto as modalidad_puesto_nuevo,
+actual.etiqueta_plan_horario as etiqueta_plan_horario_nuevo,
+anterior.id_posicion as id_posicion_anterior,
+anterior.nombre_puesto as nombre_puesto_anterior,
+anterior.nivel_gestion as nivel_gestion_anterior,
+anterior.fecha_efectiva_movimiento as fecha_efectiva_anterior,
+anterior.evento_asociado as evento_asociado_anterior,
+anterior.razon_evento as razon_evento_anterior,
+anterior.posicion_regional as regional_anterior,
+anterior.posicion_plaza as plaza_anterior,
+anterior.posicion_estado as estado_anterior,
+anterior.posicion_municipio as municipio_anterior,
+anterior.posicion_localidad as localidad_anterior,
+anterior.posicion_ubicacion as posicion_ubicacion_anterior,
+anterior.id_centro_costos as id_centro_costos_anterior,
+anterior.posicion_centro_costos as posicion_centro_costos_anterior,
+anterior.puesto_generico as puesto_generico_anterior,
+anterior.tabulador_salarial as tabulador_salarial_anterior,
+anterior.familia_puestos as familia_puestos_anterior,
+anterior.modalidad_puesto as modalidad_puesto_anterior,
+anterior.etiqueta_plan_horario as etiqueta_plan_horario_anterior,
+CASE WHEN actual.nombre_puesto = anterior.nombre_puesto THEN 'false' ELSE 'true' END AS cambio_nombre_puesto,
+CASE WHEN actual.nivel_gestion = anterior.nivel_gestion THEN 'false' ELSE 'true' END AS cambio_nivel_gestion,
+CASE WHEN actual.posicion_regional = anterior.posicion_regional THEN 'false' ELSE 'true' END AS cambio_regional,
+CASE WHEN actual.posicion_plaza = anterior.posicion_plaza THEN 'false' ELSE 'true' END AS cambio_plaza,
+CASE WHEN actual.posicion_estado = anterior.posicion_estado THEN 'false' ELSE 'true' END AS cambio_estado,
+CASE WHEN actual.posicion_municipio = anterior.posicion_municipio THEN 'false' ELSE 'true' END AS cambio_municipio,
+CASE WHEN actual.posicion_localidad = anterior.posicion_localidad THEN 'false' ELSE 'true' END AS cambio_localidad,
+CASE WHEN actual.posicion_ubicacion = anterior.posicion_ubicacion THEN 'false' ELSE 'true' END AS cambio_posicion_ubicacion,
+CASE WHEN actual.id_centro_costos = anterior.id_centro_costos THEN 'false' ELSE 'true' END AS cambio_id_centro_costos,
+CASE WHEN actual.puesto_generico = anterior.puesto_generico THEN 'false' ELSE 'true' END AS cambio_puesto_generico,
+CASE WHEN actual.tabulador_salarial = anterior.tabulador_salarial THEN 'false' ELSE 'true' END AS cambio_tabulador_salarial,
+CASE WHEN actual.familia_puestos = anterior.familia_puestos THEN 'false' ELSE 'true' END AS cambio_familia_puestos,
+CASE WHEN actual.modalidad_puesto = anterior.modalidad_puesto THEN 'false' ELSE 'true' END AS cambio_modalidad_puesto,
+CASE WHEN actual.etiqueta_plan_horario = anterior.etiqueta_plan_horario THEN 'false' ELSE 'true' END AS cambio_etiqueta_plan_horario,
+actual.secuencia_movimiento
+FROM 
+(SELECT 
+  *,
+  ROW_NUMBER() OVER (PARTITION BY id_colaborador ORDER BY fecha_efectiva_movimiento) as secuencia_movimiento
+  FROM hist_movimientos) actual
+LEFT JOIN 
+(SELECT 
+  *,
+  ROW_NUMBER() OVER (PARTITION BY id_colaborador ORDER BY fecha_efectiva_movimiento) as secuencia_movimiento
+  FROM hist_movimientos) anterior 
+ON actual.id_colaborador = anterior.id_colaborador 
+AND actual.secuencia_movimiento = anterior.secuencia_movimiento + 1
+WHERE 
+actual.fecha_efectiva_movimiento >= '2022-08-22'
+--    AND actual.secuencia_movimiento > 1
+ORDER BY actual.id_colaborador, actual.secuencia_movimiento
+;
