@@ -106,132 +106,77 @@ cat("✅ El archivo ha sido guardado en:", output_path, "\n")
 ########################################################################
 ########################################################################
 
+# ===============================
+# 1. Librerías
+# ===============================
 library(DBI)
 library(RSQLite)
 library(dplyr)
 library(lubridate)
 library(openxlsx)
 
-# =========================
-# 1. Conexión a SQLite
-# =========================
+# ===============================
+# 2. Conexión a la base SQLite
+# ===============================
 db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
 
 con <- dbConnect(SQLite(), db_path)
 
-# =========================
-# 2. Cargar movimientos
-# =========================
-hist_movimientos <- dbGetQuery(con, "
-  SELECT *
-  FROM hist_movimientos
-  WHERE fecha_efectiva_movimiento >= '2022-08-22'
-")
+# ===============================
+# 3. Cargar tabla de movimientos
+# ===============================
+hist_movimientos <- dbReadTable(con, "hist_movimientos")
 
+# Cerrar conexión (ya no se necesita)
 dbDisconnect(con)
 
-# Asegurar tipo fecha
-hist_movimientos <- hist_movimientos %>%
-  mutate(fecha_efectiva_movimiento = as.Date(fecha_efectiva_movimiento))
-
-# =========================
-# 3. Movimiento anterior del colaborador
-# =========================
-mov_colab <- hist_movimientos %>%
-  arrange(id_colaborador, fecha_efectiva_movimiento, id_key) %>%
+# ===============================
+# 4. Procesar traza de movimientos
+# ===============================
+traza_movimientos <- hist_movimientos %>%
+  arrange(id_colaborador, id_key) %>%   # Respeta secuencia real
   group_by(id_colaborador) %>%
   mutate(
-    id_posicion_anterior_colaborador      = lag(id_posicion),
-    nombre_puesto_anterior_colaborador    = lag(nombre_puesto),
-    fecha_mov_anterior_colaborador        = lag(fecha_efectiva_movimiento),
-    evento_anterior_colaborador           = lag(evento_asociado),
-    razon_anterior_colaborador            = lag(razon_evento)
-  ) %>%
-  ungroup()
-
-# =========================
-# 4. Ocupante anterior de la posición
-# =========================
-ocupante_anterior <- hist_movimientos %>%
-  arrange(id_posicion, fecha_efectiva_movimiento, id_key) %>%
-  group_by(id_posicion) %>%
-  mutate(
-    id_colaborador_anterior_posicion  = lag(id_colaborador),
-    fecha_mov_anterior_posicion       = lag(fecha_efectiva_movimiento),
-    id_key_anterior_posicion           = lag(id_key)
+    id_posicion_anterior = lag(id_posicion),
+    posicion_anterior    = lag(posicion),
+    fecha_mov_anterior   = lag(fecha_movimiento)
   ) %>%
   ungroup() %>%
+  
+  # Renombrar columnas actuales para claridad
+  rename(
+    id_posicion_nueva = id_posicion,
+    posicion_nueva    = posicion
+  )
+
+# ===============================
+# 5. Seleccionar SOLO columnas necesarias
+# ===============================
+traza_final <- traza_movimientos %>%
   select(
     id_key,
-    id_colaborador_anterior_posicion,
-    fecha_mov_anterior_posicion
+    id_colaborador,
+    nombre_colaborador,
+    fecha_movimiento,
+    tipo_movimiento,
+    id_posicion_anterior,
+    posicion_anterior,
+    id_posicion_nueva,
+    posicion_nueva
   )
 
-# =========================
-# 5. Unir ocupante anterior al movimiento
-# =========================
-mov_base <- mov_colab %>%
-  left_join(ocupante_anterior, by = "id_key")
+# ===============================
+# 6. Exportar a Excel
+# ===============================
+output_path <- "C:/Users/racl26345/Documents/Gestión de Indicadores/Indicadores de RH (2015-2024)/Indicadores 2025/12. Diciembre/05 Otros/traza_movimientos_validacion.xlsx"
 
-# =========================
-# 6. Salida del ocupante anterior
-# =========================
-salida_ocupante <- hist_movimientos %>%
-  rename(
-    id_colaborador_anterior_posicion = id_colaborador,
-    fecha_salida_ocupante            = fecha_efectiva_movimiento,
-    id_posicion_destino_ocupante     = id_posicion,
-    nombre_puesto_destino_ocupante   = nombre_puesto,
-    evento_salida_ocupante           = evento_asociado,
-    razon_salida_ocupante            = razon_evento
-  ) %>%
-  select(
-    id_colaborador_anterior_posicion,
-    fecha_salida_ocupante,
-    id_posicion_destino_ocupante,
-    nombre_puesto_destino_ocupante,
-    evento_salida_ocupante,
-    razon_salida_ocupante
-  )
+write.xlsx(
+  traza_final,
+  file = output_path,
+  overwrite = TRUE
+)
 
-mov_final <- mov_base %>%
-  left_join(
-    salida_ocupante,
-    by = "id_colaborador_anterior_posicion"
-  ) %>%
-  filter(
-    is.na(fecha_mov_anterior_posicion) |
-    fecha_salida_ocupante > fecha_mov_anterior_posicion
-  ) %>%
-  arrange(id_key, fecha_salida_ocupante) %>%
-  group_by(id_key) %>%
-  slice(1) %>%        # <<< CLAVE: una sola fila por movimiento
-  ungroup()
-
-# =========================
-# 7. Clasificación de sustitución
-# =========================
-mov_final <- mov_final %>%
-  mutate(
-    tipo_sustitucion = case_when(
-      is.na(id_colaborador_anterior_posicion) ~ "POSICION_NUEVA",
-      grepl("PROMO", toupper(evento_salida_ocupante)) ~ "SUSTITUCION_POR_PROMOCION",
-      grepl("BAJA|TERM|RENUNCIA", toupper(evento_salida_ocupante)) ~ "SUSTITUCION_POR_ROTACION",
-      TRUE ~ "SUSTITUCION_NO_CLASIFICADA"
-    )
-  )
-
-# =========================
-# 8. Exportar a Excel
-# =========================
-output_path <- "C:/Users/racl26345/Documents/Gestión de Indicadores/Indicadores de RH (2015-2024)/Indicadores 2025/12. Diciembre/05 Otros/movilidad_colaboradores.xlsx"
-
-write.xlsx(mov_final, output_path)
-
-message("Archivo generado correctamente en:\n", output_path)
-
-
-
-  
-  
-  C:\Users\racl26345\Documents\Gestión de Indicadores\Indicadores de RH (2015-2024)\Indicadores 2025\12. Diciembre\05 Otros
+# ===============================
+# 7. Mensaje final
+# ===============================
+cat("Archivo generado correctamente en:\n", output_path)
