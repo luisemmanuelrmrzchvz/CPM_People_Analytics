@@ -180,3 +180,80 @@ write.xlsx(
 # 7. Mensaje final
 # ===============================
 cat("Archivo generado correctamente en:\n", output_path)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
++   # Renombrar columnas actuales para claridad
+  +   rename(
+    +     id_posicion_nueva = id_posicion,
+    +     posicion_nueva    = posicion
+    +   )
+Error in `mutate()`:
+  ℹ In argument: `posicion_anterior = lag(posicion)`.
+ℹ In group 1: `id_colaborador = 21`.
+Caused by error:
+  ! objeto 'posicion' no encontrado
+Run `rlang::last_trace()` to see where the error occurred.
+
+> rlang::last_trace()
+<error/dplyr:::mutate_error>
+  Error in `mutate()`:
+  ℹ In argument: `posicion_anterior = lag(posicion)`.
+ℹ In group 1: `id_colaborador = 21`.
+Caused by error:
+  ! objeto 'posicion' no encontrado
+---
+  Backtrace:
+  ▆
+1. ├─... %>% ...
+2. ├─dplyr::rename(., id_posicion_nueva = id_posicion, posicion_nueva = posicion)
+3. ├─dplyr::ungroup(.)
+4. ├─dplyr::mutate(...)
+5. ├─dplyr:::mutate.data.frame(...)
+6. │ └─dplyr:::mutate_cols(.data, dplyr_quosures(...), by)
+7. │   ├─base::withCallingHandlers(...)
+8. │   └─dplyr:::mutate_col(dots[[i]], data, mask, new_columns)
+9. │     └─mask$eval_all_mutate(quo)
+10. │       └─dplyr (local) eval()
+11. └─dplyr::lag(posicion)
+Run rlang::last_trace(drop = FALSE) to see 3 hidden frames.
+> rlang::last_trace(drop = FALSE)
+<error/dplyr:::mutate_error>
+  Error in `mutate()`:
+  ℹ In argument: `posicion_anterior = lag(posicion)`.
+ℹ In group 1: `id_colaborador = 21`.
+Caused by error:
+  ! objeto 'posicion' no encontrado
+---
+  Backtrace:
+  ▆
+1. ├─... %>% ...
+2. ├─dplyr::rename(., id_posicion_nueva = id_posicion, posicion_nueva = posicion)
+3. ├─dplyr::ungroup(.)
+4. ├─dplyr::mutate(...)
+5. ├─dplyr:::mutate.data.frame(...)
+6. │ └─dplyr:::mutate_cols(.data, dplyr_quosures(...), by)
+7. │   ├─base::withCallingHandlers(...)
+8. │   └─dplyr:::mutate_col(dots[[i]], data, mask, new_columns)
+9. │     └─mask$eval_all_mutate(quo)
+10. │       └─dplyr (local) eval()
+11. ├─dplyr::lag(posicion)
+12. └─base::.handleSimpleError(...)
+13.   └─dplyr (local) h(simpleError(msg, call))
+14.     └─rlang::abort(message, class = error_class, parent = parent, call = error_call)
