@@ -106,154 +106,189 @@ cat("✅ El archivo ha sido guardado en:", output_path, "\n")
 ########################################################################
 ########################################################################
 
-# ===============================
-# 1. Librerías
-# ===============================
+# Paquetes (instalar si hace falta)
+# install.packages(c("DBI","RSQLite","dplyr","lubridate","openxlsx"))
+
 library(DBI)
 library(RSQLite)
 library(dplyr)
 library(lubridate)
 library(openxlsx)
 
-# ===============================
-# 2. Conexión a la base SQLite
-# ===============================
+# Rutas
 db_path <- "C:/Users/racl26345/Documents/DataBases/people_analytics.db"
+output_path <- "C:/Users/racl26345/Documents/Gestión de Indicadores/Indicadores de RH (2015-2024)/Indicadores 2025/12. Diciembre/05 Otros/traza_movimientos_validacion.xlsx"
 
+# ======================
+# 1) Conectar y leer solo columnas necesarias
+# ======================
 con <- dbConnect(SQLite(), db_path)
 
-# ===============================
-# 3. Cargar tabla de movimientos
-# ===============================
-hist_movimientos <- dbReadTable(con, "hist_movimientos")
+sql <- "
+SELECT
+  id_key,
+  id_colaborador,
+  nombre,                       -- nombre del colaborador en tu tabla (lo vimos antes)
+  id_posicion,
+  nombre_puesto,
+  fecha_efectiva_movimiento,
+  evento_asociado,
+  razon_evento
+FROM hist_movimientos
+WHERE fecha_efectiva_movimiento >= '2022-08-22'
+"
 
-# Cerrar conexión (ya no se necesita)
+hist_movimientos <- dbGetQuery(con, sql)
+
 dbDisconnect(con)
 
-# ===============================
-# 4. Procesar traza de movimientos
-# ===============================
-traza_movimientos <- hist_movimientos %>%
-  arrange(id_colaborador, id_key) %>%   # Respeta secuencia real
-  group_by(id_colaborador) %>%
+# Asegurar tipos
+hist_movimientos <- hist_movimientos %>%
   mutate(
-    id_posicion_anterior = lag(id_posicion),
-    posicion_anterior    = lag(posicion),
-    fecha_mov_anterior   = lag(fecha_movimiento)
-  ) %>%
-  ungroup() %>%
-  
-  # Renombrar columnas actuales para claridad
-  rename(
-    id_posicion_nueva = id_posicion,
-    posicion_nueva    = posicion
+    fecha_efectiva_movimiento = as.Date(fecha_efectiva_movimiento)
   )
 
-# ===============================
-# 5. Seleccionar SOLO columnas necesarias
-# ===============================
-traza_final <- traza_movimientos %>%
+# ======================
+# 2) Normalizar nombres para trabajar (nombres consistentes en el pipeline)
+# ======================
+hist_movimientos <- hist_movimientos %>%
+  rename(
+    nombre_colaborador = nombre,
+    fecha_movimiento   = fecha_efectiva_movimiento,
+    posicion_nueva     = nombre_puesto,    # texto del puesto en la fila actual
+    id_posicion_nueva  = id_posicion
+  )
+
+# Si tu tabla ya tuviera una columna 'tipo_movimiento' y quisieras conservarla,
+# podrías seleccionarla arriba y renombrarla aquí. Como no la tenemos, la derivamos luego.
+
+# ======================
+# 3) Movimiento anterior del colaborador (lag por colaborador)
+# ======================
+mov_colab <- hist_movimientos %>%
+  arrange(id_colaborador, fecha_movimiento, id_key) %>%
+  group_by(id_colaborador) %>%
+  mutate(
+    id_posicion_anterior = lag(id_posicion_nueva),
+    posicion_anterior    = lag(posicion_nueva),
+    fecha_mov_anterior   = lag(fecha_movimiento),
+    evento_anterior_colaborador = lag(evento_asociado),
+    razon_anterior_colaborador  = lag(razon_evento)
+  ) %>%
+  ungroup()
+
+# ======================
+# 4) Ocupante anterior de la posición (lag por id_posicion)
+# ======================
+ocupante_anterior <- hist_movimientos %>%
+  arrange(id_posicion_nueva, fecha_movimiento, id_key) %>%
+  group_by(id_posicion_nueva) %>%
+  mutate(
+    id_colaborador_anterior_posicion = lag(id_colaborador),
+    fecha_mov_anterior_posicion      = lag(fecha_movimiento),
+    id_key_anterior_posicion         = lag(id_key)
+  ) %>%
+  ungroup() %>%
+  select(id_key, id_colaborador_anterior_posicion, fecha_mov_anterior_posicion)
+
+# ======================
+# 5) Unir ocupante anterior al movimiento del colaborador
+# ======================
+mov_base <- mov_colab %>%
+  left_join(ocupante_anterior, by = "id_key")
+
+# ======================
+# 6) Determinar la primera salida (primer movimiento posterior) del ocupante anterior
+#    — Para cada movimiento, buscamos el primer registro posterior del ocupante anterior
+# ======================
+# Preparamos un dataframe con los movimientos para hacer el join
+mov_for_join <- hist_movimientos %>%
   select(
+    id_key_destino = id_key,
+    id_colaborador_destino = id_colaborador,
+    fecha_movimiento_destino = fecha_movimiento,
+    id_posicion_destino = id_posicion_nueva,
+    posicion_destino = posicion_nueva,
+    evento_salida = evento_asociado,
+    razon_salida = razon_evento
+  )
+
+# Hacemos LEFT JOIN y quedamos con la primera salida posterior (por id_key original)
+salidas_joined <- mov_base %>%
+  left_join(
+    mov_for_join,
+    by = c("id_colaborador_anterior_posicion" = "id_colaborador_destino")
+  ) %>%
+  # Solo las salidas posteriores a la fecha en que dejó la posición
+  filter(
+    is.na(fecha_mov_anterior_posicion) | fecha_movimiento_destino > fecha_mov_anterior_posicion
+  ) %>%
+  arrange(id_key, fecha_movimiento_destino, id_key_destino) %>%
+  group_by(id_key) %>%
+  slice(1) %>%    # <<< importante: si hay varias filas, nos quedamos con la primera salida posterior (o NA si no hay)
+  ungroup()
+
+# ======================
+# 7) Clasificación tipo_sustitucion (usando evento_salida)
+# ======================
+salidas_joined <- salidas_joined %>%
+  mutate(
+    tipo_sustitucion = case_when(
+      is.na(id_colaborador_anterior_posicion) ~ "POSICION_NUEVA",
+      grepl("PROMO", toupper(evento_salida), fixed = TRUE) ~ "SUSTITUCION_POR_PROMOCION",
+      grepl("BAJA", toupper(evento_salida), fixed = TRUE) |
+      grepl("TERM", toupper(evento_salida), fixed = TRUE) |
+      grepl("RENUNCIA", toupper(evento_salida), fixed = TRUE) ~ "SUSTITUCION_POR_ROTACION",
+      TRUE ~ "SUSTITUCION_NO_CLASIFICADA"
+    )
+  )
+
+# ======================
+# 8) Seleccionar SOLO las columnas que quieres validar
+# ======================
+traza_final <- salidas_joined %>%
+  transmute(
     id_key,
     id_colaborador,
     nombre_colaborador,
+    id_posicion_nueva,
+    posicion_nueva,
     fecha_movimiento,
-    tipo_movimiento,
+    # anterior del colaborador
     id_posicion_anterior,
     posicion_anterior,
-    id_posicion_nueva,
-    posicion_nueva
+    fecha_mov_anterior,
+    # ocupante anterior de la posición y su salida
+    id_colaborador_anterior_posicion,
+    fecha_mov_anterior_posicion,
+    id_posicion_destino_ocupante = id_posicion_destino,
+    nombre_puesto_destino_ocupante = posicion_destino,
+    evento_salida_ocupante = evento_salida,
+    razon_salida_ocupante = razon_salida,
+    fecha_salida_ocupante = fecha_movimiento_destino,
+    tipo_sustitucion
   )
 
-# ===============================
-# 6. Exportar a Excel
-# ===============================
-output_path <- "C:/Users/racl26345/Documents/Gestión de Indicadores/Indicadores de RH (2015-2024)/Indicadores 2025/12. Diciembre/05 Otros/traza_movimientos_validacion.xlsx"
+# ======================
+# 9) Comprobaciones rápidas
+# ======================
+# 9.a) ¿Algún id_key duplicado?
+dups <- traza_final %>%
+  count(id_key) %>%
+  filter(n > 1)
 
-write.xlsx(
-  traza_final,
-  file = output_path,
-  overwrite = TRUE
-)
+if(nrow(dups) == 0) {
+  message("OK: No hay id_key duplicados en traza_final.")
+} else {
+  warning("ATENCION: Hay id_key duplicados. Ejemplos:")
+  print(head(dups))
+}
 
-# ===============================
-# 7. Mensaje final
-# ===============================
-cat("Archivo generado correctamente en:\n", output_path)
+# 9.b) Mostrar primeras filas para revisión rápida
+print(head(traza_final, 20))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-+   # Renombrar columnas actuales para claridad
-  +   rename(
-    +     id_posicion_nueva = id_posicion,
-    +     posicion_nueva    = posicion
-    +   )
-Error in `mutate()`:
-  ℹ In argument: `posicion_anterior = lag(posicion)`.
-ℹ In group 1: `id_colaborador = 21`.
-Caused by error:
-  ! objeto 'posicion' no encontrado
-Run `rlang::last_trace()` to see where the error occurred.
-
-> rlang::last_trace()
-<error/dplyr:::mutate_error>
-  Error in `mutate()`:
-  ℹ In argument: `posicion_anterior = lag(posicion)`.
-ℹ In group 1: `id_colaborador = 21`.
-Caused by error:
-  ! objeto 'posicion' no encontrado
----
-  Backtrace:
-  ▆
-1. ├─... %>% ...
-2. ├─dplyr::rename(., id_posicion_nueva = id_posicion, posicion_nueva = posicion)
-3. ├─dplyr::ungroup(.)
-4. ├─dplyr::mutate(...)
-5. ├─dplyr:::mutate.data.frame(...)
-6. │ └─dplyr:::mutate_cols(.data, dplyr_quosures(...), by)
-7. │   ├─base::withCallingHandlers(...)
-8. │   └─dplyr:::mutate_col(dots[[i]], data, mask, new_columns)
-9. │     └─mask$eval_all_mutate(quo)
-10. │       └─dplyr (local) eval()
-11. └─dplyr::lag(posicion)
-Run rlang::last_trace(drop = FALSE) to see 3 hidden frames.
-> rlang::last_trace(drop = FALSE)
-<error/dplyr:::mutate_error>
-  Error in `mutate()`:
-  ℹ In argument: `posicion_anterior = lag(posicion)`.
-ℹ In group 1: `id_colaborador = 21`.
-Caused by error:
-  ! objeto 'posicion' no encontrado
----
-  Backtrace:
-  ▆
-1. ├─... %>% ...
-2. ├─dplyr::rename(., id_posicion_nueva = id_posicion, posicion_nueva = posicion)
-3. ├─dplyr::ungroup(.)
-4. ├─dplyr::mutate(...)
-5. ├─dplyr:::mutate.data.frame(...)
-6. │ └─dplyr:::mutate_cols(.data, dplyr_quosures(...), by)
-7. │   ├─base::withCallingHandlers(...)
-8. │   └─dplyr:::mutate_col(dots[[i]], data, mask, new_columns)
-9. │     └─mask$eval_all_mutate(quo)
-10. │       └─dplyr (local) eval()
-11. ├─dplyr::lag(posicion)
-12. └─base::.handleSimpleError(...)
-13.   └─dplyr (local) h(simpleError(msg, call))
-14.     └─rlang::abort(message, class = error_class, parent = parent, call = error_call)
+# ======================
+# 10) Exportar a Excel
+# ======================
+write.xlsx(traza_final, output_path, overwrite = TRUE)
+message("Archivo exportado en:\n", output_path)
