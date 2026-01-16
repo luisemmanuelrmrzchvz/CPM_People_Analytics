@@ -313,3 +313,7 @@ ORDER BY
   mc.id_colaborador,
   mc.fecha_efectiva_movimiento,
   mc.id_key;
+
+  
+  
+  C:\Users\racl26345\Documents\Gestión de Indicadores\Indicadores de RH (2015-2024)\Indicadores 2025\12. Diciembre\05 Otros
