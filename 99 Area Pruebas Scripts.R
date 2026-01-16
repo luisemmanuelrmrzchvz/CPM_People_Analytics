@@ -106,213 +106,101 @@ cat("✅ El archivo ha sido guardado en:", output_path, "\n")
 ########################################################################
 ########################################################################
 
-WITH movimientos_base AS (
+WITH base AS (
   SELECT
-    *
+    *,
+    ROW_NUMBER() OVER (
+      PARTITION BY id_colaborador
+      ORDER BY fecha_efectiva_movimiento, id_key
+    ) AS rn_colab
   FROM hist_movimientos
   WHERE fecha_efectiva_movimiento >= '2022-08-22'
 ),
 
-/* ===============================
-   MOVIMIENTO DEL COLABORADOR
-   (y su movimiento anterior real)
-   =============================== */
-movimiento_colaborador AS (
+/* Movimiento anterior del colaborador */
+mov_colab AS (
   SELECT
-    m_actual.id_key,
-    m_actual.id_colaborador,
-    m_actual.nombre,
-    m_actual.id_posicion,
-    m_actual.nombre_puesto,
-    m_actual.fecha_efectiva_movimiento,
-    m_actual.evento_asociado,
-    m_actual.razon_evento,
-
-    /* Movimiento anterior del colaborador */
-    (
-      SELECT m_prev.id_posicion
-      FROM movimientos_base m_prev
-      WHERE m_prev.id_colaborador = m_actual.id_colaborador
-        AND m_prev.fecha_efectiva_movimiento < m_actual.fecha_efectiva_movimiento
-      ORDER BY m_prev.fecha_efectiva_movimiento DESC, m_prev.id_key DESC
-      LIMIT 1
-    ) AS id_posicion_anterior_colaborador,
-
-    (
-      SELECT m_prev.nombre_puesto
-      FROM movimientos_base m_prev
-      WHERE m_prev.id_colaborador = m_actual.id_colaborador
-        AND m_prev.fecha_efectiva_movimiento < m_actual.fecha_efectiva_movimiento
-      ORDER BY m_prev.fecha_efectiva_movimiento DESC, m_prev.id_key DESC
-      LIMIT 1
-    ) AS nombre_puesto_anterior_colaborador,
-
-    (
-      SELECT m_prev.fecha_efectiva_movimiento
-      FROM movimientos_base m_prev
-      WHERE m_prev.id_colaborador = m_actual.id_colaborador
-        AND m_prev.fecha_efectiva_movimiento < m_actual.fecha_efectiva_movimiento
-      ORDER BY m_prev.fecha_efectiva_movimiento DESC, m_prev.id_key DESC
-      LIMIT 1
-    ) AS fecha_mov_anterior_colaborador,
-
-    (
-      SELECT m_prev.evento_asociado
-      FROM movimientos_base m_prev
-      WHERE m_prev.id_colaborador = m_actual.id_colaborador
-        AND m_prev.fecha_efectiva_movimiento < m_actual.fecha_efectiva_movimiento
-      ORDER BY m_prev.fecha_efectiva_movimiento DESC, m_prev.id_key DESC
-      LIMIT 1
-    ) AS evento_anterior_colaborador,
-
-    (
-      SELECT m_prev.razon_evento
-      FROM movimientos_base m_prev
-      WHERE m_prev.id_colaborador = m_actual.id_colaborador
-        AND m_prev.fecha_efectiva_movimiento < m_actual.fecha_efectiva_movimiento
-      ORDER BY m_prev.fecha_efectiva_movimiento DESC, m_prev.id_key DESC
-      LIMIT 1
-    ) AS razon_anterior_colaborador
-
-  FROM movimientos_base m_actual
+    cur.*,
+    prev.id_posicion               AS id_posicion_anterior_colaborador,
+    prev.nombre_puesto             AS nombre_puesto_anterior_colaborador,
+    prev.fecha_efectiva_movimiento AS fecha_mov_anterior_colaborador,
+    prev.evento_asociado           AS evento_anterior_colaborador,
+    prev.razon_evento              AS razon_anterior_colaborador
+  FROM base cur
+  LEFT JOIN base prev
+    ON cur.id_colaborador = prev.id_colaborador
+   AND cur.rn_colab = prev.rn_colab + 1
 ),
 
-/* =====================================
-   OCUPANTE ANTERIOR DE LA POSICIÓN
-   ===================================== */
-ocupante_anterior_posicion AS (
+/* Ocupante anterior de la posición */
+pos_base AS (
   SELECT
-    m.id_key,
-    m.id_colaborador            AS id_colaborador_actual,
-    m.id_posicion               AS id_posicion_actual,
-    m.fecha_efectiva_movimiento AS fecha_mov_actual,
-
-    (
-      SELECT p.id_colaborador
-      FROM movimientos_base p
-      WHERE p.id_posicion = m.id_posicion
-        AND p.id_colaborador <> m.id_colaborador
-        AND p.fecha_efectiva_movimiento < m.fecha_efectiva_movimiento
-      ORDER BY p.fecha_efectiva_movimiento DESC, p.id_key DESC
-      LIMIT 1
-    ) AS id_colaborador_anterior_posicion,
-
-    (
-      SELECT p.fecha_efectiva_movimiento
-      FROM movimientos_base p
-      WHERE p.id_posicion = m.id_posicion
-        AND p.id_colaborador <> m.id_colaborador
-        AND p.fecha_efectiva_movimiento < m.fecha_efectiva_movimiento
-      ORDER BY p.fecha_efectiva_movimiento DESC, p.id_key DESC
-      LIMIT 1
-    ) AS fecha_mov_anterior_posicion
-
-  FROM movimientos_base m
+    *,
+    ROW_NUMBER() OVER (
+      PARTITION BY id_posicion
+      ORDER BY fecha_efectiva_movimiento, id_key
+    ) AS rn_pos
+  FROM hist_movimientos
+  WHERE fecha_efectiva_movimiento >= '2022-08-22'
 ),
 
-/* =====================================
-   SALIDA DEL OCUPANTE ANTERIOR
-   ===================================== */
-movimiento_salida_ocupante AS (
+ocupante_anterior AS (
   SELECT
-    oap.id_key,
-    oap.id_colaborador_actual,
-    oap.id_posicion_actual,
-    oap.fecha_mov_actual,
-    oap.id_colaborador_anterior_posicion,
+    cur.id_key,
+    cur.id_colaborador        AS id_colaborador_actual,
+    cur.id_posicion           AS id_posicion_actual,
+    cur.fecha_efectiva_movimiento AS fecha_mov_actual,
+    prev.id_colaborador       AS id_colaborador_anterior_posicion,
+    prev.fecha_efectiva_movimiento AS fecha_mov_anterior_posicion
+  FROM pos_base cur
+  LEFT JOIN pos_base prev
+    ON cur.id_posicion = prev.id_posicion
+   AND cur.rn_pos = prev.rn_pos + 1
+   AND cur.id_colaborador <> prev.id_colaborador
+),
 
-    (
-      SELECT s.id_posicion
-      FROM movimientos_base s
-      WHERE s.id_colaborador = oap.id_colaborador_anterior_posicion
-        AND s.fecha_efectiva_movimiento > oap.fecha_mov_anterior_posicion
-      ORDER BY s.fecha_efectiva_movimiento ASC, s.id_key ASC
-      LIMIT 1
-    ) AS id_posicion_destino_ocupante,
-
-    (
-      SELECT s.nombre_puesto
-      FROM movimientos_base s
-      WHERE s.id_colaborador = oap.id_colaborador_anterior_posicion
-        AND s.fecha_efectiva_movimiento > oap.fecha_mov_anterior_posicion
-      ORDER BY s.fecha_efectiva_movimiento ASC, s.id_key ASC
-      LIMIT 1
-    ) AS nombre_puesto_destino_ocupante,
-
-    (
-      SELECT s.evento_asociado
-      FROM movimientos_base s
-      WHERE s.id_colaborador = oap.id_colaborador_anterior_posicion
-        AND s.fecha_efectiva_movimiento > oap.fecha_mov_anterior_posicion
-      ORDER BY s.fecha_efectiva_movimiento ASC, s.id_key ASC
-      LIMIT 1
-    ) AS evento_salida_ocupante,
-
-    (
-      SELECT s.razon_evento
-      FROM movimientos_base s
-      WHERE s.id_colaborador = oap.id_colaborador_anterior_posicion
-        AND s.fecha_efectiva_movimiento > oap.fecha_mov_anterior_posicion
-      ORDER BY s.fecha_efectiva_movimiento ASC, s.id_key ASC
-      LIMIT 1
-    ) AS razon_salida_ocupante,
-
-    (
-      SELECT s.fecha_efectiva_movimiento
-      FROM movimientos_base s
-      WHERE s.id_colaborador = oap.id_colaborador_anterior_posicion
-        AND s.fecha_efectiva_movimiento > oap.fecha_mov_anterior_posicion
-      ORDER BY s.fecha_efectiva_movimiento ASC, s.id_key ASC
-      LIMIT 1
-    ) AS fecha_salida_ocupante
-
-  FROM ocupante_anterior_posicion oap
+/* Primer movimiento posterior del ocupante anterior */
+salida_ocupante AS (
+  SELECT
+    oap.*,
+    next.id_posicion           AS id_posicion_destino_ocupante,
+    next.nombre_puesto         AS nombre_puesto_destino_ocupante,
+    next.evento_asociado       AS evento_salida_ocupante,
+    next.razon_evento          AS razon_salida_ocupante,
+    next.fecha_efectiva_movimiento AS fecha_salida_ocupante
+  FROM ocupante_anterior oap
+  LEFT JOIN base next
+    ON next.id_colaborador = oap.id_colaborador_anterior_posicion
+   AND next.fecha_efectiva_movimiento > oap.fecha_mov_anterior_posicion
+  QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY oap.id_key
+    ORDER BY next.fecha_efectiva_movimiento
+  ) = 1
 )
 
-/* =====================================
-   RESULTADO FINAL
-   ===================================== */
 SELECT
-  mc.id_colaborador,
-  mc.nombre                                AS nombre_colaborador,
-  mc.id_posicion                           AS id_posicion_actual,
-  mc.nombre_puesto                         AS nombre_puesto_actual,
-  mc.fecha_efectiva_movimiento             AS fecha_movimiento_actual,
-  mc.evento_asociado                       AS evento_actual,
-  mc.razon_evento                          AS razon_actual,
-
-  mc.id_posicion_anterior_colaborador,
-  mc.nombre_puesto_anterior_colaborador,
-  mc.fecha_mov_anterior_colaborador,
-  mc.evento_anterior_colaborador,
-  mc.razon_anterior_colaborador,
-
-  o.id_colaborador_anterior_posicion,
-  o.id_posicion_destino_ocupante,
-  o.nombre_puesto_destino_ocupante,
-  o.evento_salida_ocupante,
-  o.razon_salida_ocupante,
-  o.fecha_salida_ocupante,
-
+  mc.*,
+  so.id_colaborador_anterior_posicion,
+  so.id_posicion_destino_ocupante,
+  so.nombre_puesto_destino_ocupante,
+  so.evento_salida_ocupante,
+  so.razon_salida_ocupante,
+  so.fecha_salida_ocupante,
   CASE
-    WHEN o.id_colaborador_anterior_posicion IS NULL
-      THEN 'POSICION_NUEVA'
-    WHEN UPPER(COALESCE(o.evento_salida_ocupante, '')) LIKE '%PROMO%'
+    WHEN so.id_colaborador_anterior_posicion IS NULL THEN 'POSICION_NUEVA'
+    WHEN UPPER(COALESCE(so.evento_salida_ocupante,'')) LIKE '%PROMO%'
       THEN 'SUSTITUCION_POR_PROMOCION'
-    WHEN UPPER(COALESCE(o.evento_salida_ocupante, '')) LIKE '%BAJA%'
-      OR UPPER(COALESCE(o.evento_salida_ocupante, '')) LIKE '%TERM%'
-      OR UPPER(COALESCE(o.evento_salida_ocupante, '')) LIKE '%RENUNCIA%'
+    WHEN UPPER(COALESCE(so.evento_salida_ocupante,'')) LIKE '%BAJA%'
+      OR UPPER(COALESCE(so.evento_salida_ocupante,'')) LIKE '%TERM%'
+      OR UPPER(COALESCE(so.evento_salida_ocupante,'')) LIKE '%RENUNCIA%'
       THEN 'SUSTITUCION_POR_ROTACION'
     ELSE 'SUSTITUCION_NO_CLASIFICADA'
   END AS tipo_sustitucion
+FROM mov_colab mc
+LEFT JOIN salida_ocupante so
+  ON mc.id_key = so.id_key
+ORDER BY mc.id_colaborador, mc.fecha_efectiva_movimiento;
 
-FROM movimiento_colaborador mc
-LEFT JOIN movimiento_salida_ocupante o
-  ON mc.id_key = o.id_key
-ORDER BY
-  mc.id_colaborador,
-  mc.fecha_efectiva_movimiento,
-  mc.id_key;
 
   
   
