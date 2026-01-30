@@ -128,7 +128,7 @@ sql <- "
 SELECT
   id_key,
   id_colaborador,
-  nombre,                       -- nombre del colaborador en tu tabla (lo vimos antes)
+  nombre,
   id_posicion,
   nombre_puesto,
   fecha_efectiva_movimiento,
@@ -235,10 +235,10 @@ salidas_joined <- salidas_joined %>%
   mutate(
     tipo_sustitucion = case_when(
       is.na(id_colaborador_anterior_posicion) ~ "POSICION_NUEVA",
-      grepl("PROMO", toupper(evento_salida), fixed = TRUE) ~ "SUSTITUCION_POR_PROMOCION",
-      grepl("BAJA", toupper(evento_salida), fixed = TRUE) |
-      grepl("TERM", toupper(evento_salida), fixed = TRUE) |
-      grepl("RENUNCIA", toupper(evento_salida), fixed = TRUE) ~ "SUSTITUCION_POR_ROTACION",
+      grepl("CAMBIO DE REMUNERACION", toupper(evento_salida), fixed = TRUE) ~ "SUSTITUCION_POR_PROMOCION",
+      grepl("CAMBIO DE POSICION", toupper(evento_salida), fixed = TRUE) ~ "SUSTITUCION_POR_MOVIMIENTO_LATERAL",
+      grepl("CAMBIO DE DATOS", toupper(evento_salida), fixed = TRUE) ~ "TRANSFERENCIA_COLABORADOR",
+      grepl("BAJA", toupper(evento_salida), fixed = TRUE) ~ "SUSTITUCION_POR_ROTACION",
       TRUE ~ "SUSTITUCION_NO_CLASIFICADA"
     )
   )
@@ -254,6 +254,8 @@ traza_final <- salidas_joined %>%
     id_posicion_nueva,
     posicion_nueva,
     fecha_movimiento,
+    evento_asociado,
+    razon_evento,
     # anterior del colaborador
     id_posicion_anterior,
     posicion_anterior,

@@ -9,7 +9,7 @@ library(lubridate)
 ruta_archivo <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/CPM_10_Historico_Estados.xlsx"
 
 # Leer y preparar datos
-datos <- read_excel(ruta_archivo, range = cell_rows(11:100000), col_names = FALSE) %>%
+datos <- read_excel(ruta_archivo, range = cell_rows(11:400000), col_names = FALSE) %>%
   select(c(1, 3, 7, 9, 10, 11, 12, 13, 14, 15)) %>%
   setNames(c("id_ticket", "fecha_creado", "agente_servicio", "prioridad", 
              "time_start_status", "time_end_status", "code_estado_ticket", 
