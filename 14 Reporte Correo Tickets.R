@@ -523,8 +523,8 @@ grafico_jerarquico <- ggplot(datos_grafico, aes(x = reorder(nombre, fuera_sla), 
     panel.grid.major.y = element_blank(),
     axis.text.y = element_text(size = 10),
     strip.text = element_text(size = 12, face = "bold", hjust = 0),  # Estilo de las etiquetas de categoría
-    plot.caption = element_text(hjust = 0, size = 9, color = "gray50", margin = margin(t = 10)),
-    plot.margin = margin(r = 20)
+    plot.caption = element_text(hjust = 0, size = 9, color = "gray50", margin = ggplot2::margin(t = 10)),
+    plot.margin = ggplot2::margin(r = 20)
   )
 
 # Guardar el gráfico
@@ -836,10 +836,10 @@ grafico_tiempos_procesador <- datos_analysis %>%
       size = 12,
       face = "bold",
       hjust = 0.5,
-      margin = margin(l = 10)
+      margin = ggplot2::margin(l = 10)
     ),
     legend.position = "bottom",
-    plot.margin = margin(r = 3, unit = "cm"),
+    plot.margin = ggplot2::margin(r = 3, unit = "cm"),
     axis.text.y = element_text(size = 10)
   )
 
@@ -884,7 +884,7 @@ grafico_plazas_regional <- datos_analysis %>%
     panel.spacing = unit(1.5, "lines"),
     strip.text.y = element_text(angle = 0, size = 10, face = "bold"),
     legend.position = "bottom",
-    plot.margin = margin(r = 8, unit = "cm")
+    plot.margin = ggplot2::margin(r = 8, unit = "cm")
   )
 
 
@@ -1613,8 +1613,8 @@ grafico_jerarquico <- ggplot(datos_grafico, aes(x = reorder(nombre, fuera_sla), 
     panel.grid.major.y = element_blank(),
     axis.text.y = element_text(size = 10),
     strip.text = element_text(size = 12, face = "bold", hjust = 0),  # Estilo de las etiquetas de categoría
-    plot.caption = element_text(hjust = 0, size = 9, color = "gray50", margin = margin(t = 10)),
-    plot.margin = margin(r = 20)
+    plot.caption = element_text(hjust = 0, size = 9, color = "gray50", margin = ggplot2::margin(t = 10)),
+    plot.margin = ggplot2::margin(r = 20)
   )
 
 # Guardar el gráfico
@@ -1926,10 +1926,10 @@ grafico_tiempos_procesador <- datos_analysis %>%
       size = 12,
       face = "bold",
       hjust = 0.5,
-      margin = margin(l = 10)
+      margin = ggplot2::margin(l = 10)
     ),
     legend.position = "bottom",
-    plot.margin = margin(r = 3, unit = "cm"),
+    plot.margin = ggplot2::margin(r = 3, unit = "cm"),
     axis.text.y = element_text(size = 10)
   )
 
@@ -1974,7 +1974,7 @@ grafico_plazas_regional <- datos_analysis %>%
     panel.spacing = unit(1.5, "lines"),
     strip.text.y = element_text(angle = 0, size = 10, face = "bold"),
     legend.position = "bottom",
-    plot.margin = margin(r = 8, unit = "cm")
+    plot.margin = ggplot2::margin(r = 8, unit = "cm")
   )
 
 
