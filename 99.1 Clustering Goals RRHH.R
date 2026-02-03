@@ -180,3 +180,46 @@ for (grp in sort(unique(datos$grupo))) {
 }
 
 cat("\n✔ Exploración de combinaciones finalizada\n")
+
+
+
+
+
+
+
+
+
+
+
+
+Año
+Mes
+IDColaborador
+Nombre
+Evento
+MotivoEvento
+FechaEfectiva
+IDPosicion
+CentroCostos
+DescripcionCC
+Puesto
+Grupo
+Regional
+Plaza
+Estado
+Nombre Reclutador
+FechaVacante
+Fecha término de capacitación
+Días cobertura con capacitación
+Perfil Profesional
+Segmento de puesto
+Tabulador Salarial
+Area de Personal
+Puesto Generico
+Familia de Puesto
+Escolaridad
+Especialización
+Software-Avanzado
+Software-Básico
+Software-Intermedio
+
