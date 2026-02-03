@@ -145,3 +145,60 @@ for (grp in sort(unique(datos$Grupo))) {
 }
 
 cat("\n✔ Exploración de combinaciones finalizada\n")
+
+
+
+
+
+
+
+> # =========================
+> # CARGA DE DATOS
+  > # =========================
+> datos <- read_excel(file_path) %>%
+  +   filter(!is.na(`Días cobertura con capacitación`),
+             +          !is.na(Grupo))
+Error in `filter()`:
+  ℹ In argument: `!is.na(`Días cobertura con capacitación`)`.
+Caused by error:
+  ! objeto 'Días cobertura con capacitación' no encontrado
+Run `rlang::last_trace()` to see where the error occurred.
+
+> rlang::last_trace()
+<error/rlang_error>
+  Error in `filter()`:
+  ℹ In argument: `!is.na(`Días cobertura con capacitación`)`.
+Caused by error:
+  ! objeto 'Días cobertura con capacitación' no encontrado
+---
+  Backtrace:
+  ▆
+1. ├─read_excel(file_path) %>% ...
+2. ├─dplyr::filter(...)
+3. └─dplyr:::filter.data.frame(., !is.na(`Días cobertura con capacitación`), !is.na(Grupo))
+4.   └─dplyr:::filter_rows(.data, dots, by)
+5.     └─dplyr:::filter_eval(...)
+6.       ├─base::withCallingHandlers(...)
+7.       └─mask$eval_all_filter(dots, env_filter)
+8.         └─dplyr (local) eval()
+Run rlang::last_trace(drop = FALSE) to see 3 hidden frames.
+> rlang::last_trace(drop = FALSE)
+<error/rlang_error>
+  Error in `filter()`:
+  ℹ In argument: `!is.na(`Días cobertura con capacitación`)`.
+Caused by error:
+  ! objeto 'Días cobertura con capacitación' no encontrado
+---
+  Backtrace:
+  ▆
+1. ├─read_excel(file_path) %>% ...
+2. ├─dplyr::filter(...)
+3. ├─dplyr:::filter.data.frame(., !is.na(`Días cobertura con capacitación`), !is.na(Grupo))
+4. │ └─dplyr:::filter_rows(.data, dots, by)
+5. │   └─dplyr:::filter_eval(...)
+6. │     ├─base::withCallingHandlers(...)
+7. │     └─mask$eval_all_filter(dots, env_filter)
+8. │       └─dplyr (local) eval()
+9. └─base::.handleSimpleError(...)
+10.   └─dplyr (local) h(simpleError(msg, call))
+11.     └─rlang::abort(message, class = error_class, parent = parent, call = error_call)
