@@ -88,10 +88,52 @@ perfil_field <- function(df, field) {
 
 campos_nuevos <- c("Escolaridad", "Especialización", "Software-Avanzado", "Software-Intermedio", "Software-Básico")
 campos_existentes <- intersect(campos_nuevos, colnames(datos))
-profiling_list <- map(campos_existentes, ~ perfil_field(datos, .x))
-names(profiling_list) <- campos_existentes
-# Guardar profiling
-write_xlsx(profiling_list, file.path(output_dir, "profiling_campos_nuevos.xlsx"))
+
+# =========================================================
+# PERFILADO DE CAMPOS NUEVOS (CORREGIDO)
+# =========================================================
+
+perfil_resumen <- list()
+perfil_top_valores <- list()
+
+for (campo in campos_existentes) {
+  p <- perfil_field(datos, campo)
+
+  # ---- Resumen numérico
+  perfil_resumen[[campo]] <- data.frame(
+    Campo = campo,
+    Total_Registros = p$total,
+    Registros_Vacios = p$na,
+    Registros_Con_Valor = p$total - p$na,
+    Valores_Unicos = p$unique_count
+  )
+
+  # ---- Top valores (si existen)
+  if (length(p$top) > 0) {
+    perfil_top_valores[[campo]] <- data.frame(
+      Campo = campo,
+      Valor = names(p$top),
+      Frecuencia = as.integer(p$top)
+    )
+  }
+}
+
+# Consolidar data.frames
+df_perfil_resumen <- bind_rows(perfil_resumen)
+df_perfil_top <- bind_rows(perfil_top_valores)
+
+# Exportar correctamente a Excel
+write_xlsx(
+  list(
+    "Resumen_Campos" = df_perfil_resumen,
+    "Top_Valores" = df_perfil_top
+  ),
+  path = file.path(output_dir, "profiling_campos_nuevos.xlsx")
+)
+
+cat("✔ Perfilado de campos nuevos exportado correctamente\n")
+
+
 cat("Perfilado de campos nuevos guardado en profiling_campos_nuevos.xlsx\n")
 
 # ---- Limpiar y convertir campos nuevos
