@@ -224,3 +224,41 @@ for (g in grupos_obj) {
 cat("\n==============================\n")
 cat("FIN DEL ANÁLISIS ROBUSTO\n")
 cat("==============================\n")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+> resultados_finales <- list()
+> 
+  > for (g in grupos_obj) {
+    +   resultados_finales[[g]] <- analyze_group_full(
+      +     grupo = g,
+      +     data = datos,
+      +     columnas_interes = columnas_interes,
+      +     nuevos_vars = nuevos_vars
+      +   )
+    + }
+
+============================================================
+  ANALIZANDO GRUPO: COBRANZA 
+============================================================
+  Error en randomForest.default(x = X_train, y = y_train, ntree = 300): 
+  NA not permitted in predictors
+Called from: randomForest.default(x = X_train, y = y_train, ntree = 300)
