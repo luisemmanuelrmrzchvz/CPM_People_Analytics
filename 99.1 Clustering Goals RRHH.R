@@ -185,105 +185,137 @@ cat("\nANÁLISIS FINALIZADO\n")
 
 
 
-# =========================================================
-# LIBRERÍAS
-# =========================================================
-library(readxl)
-library(dplyr)
-library(stringr)
-library(tidyr)
+> # =========================================================
+> # LIBRERÍAS
+  > # =========================================================
+> library(readxl)
+> library(dplyr)
+> library(stringr)
+> library(tidyr)
+> 
+  > # =========================================================
+> # CARGA DE DATOS
+  > # =========================================================
+> file_path <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/Detalle Días de Coberturas.xlsx"
+> datos <- read_excel(file_path)
+> 
+  > cat("\n========================================\n")
 
-# =========================================================
-# CARGA DE DATOS
-# =========================================================
-file_path <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/Detalle Días de Coberturas.xlsx"
-datos <- read_excel(file_path)
+========================================
+  > cat("TRANSFORMACIÓN DE CAMPOS DE COMPLEJIDAD\n")
+TRANSFORMACIÓN DE CAMPOS DE COMPLEJIDAD
+> cat("========================================\n")
+========================================
+  > 
+  > # =========================================================
+> # 1️⃣ ESCOLARIDAD → NIVEL MÍNIMO REQUERIDO
+  > # =========================================================
+> datos <- datos %>%
+  +   mutate(
+    +     Escolaridad_std = str_to_lower(Escolaridad),
+    +     Nivel_Escolaridad = case_when(
+      +       str_detect(Escolaridad_std, "ingenier|licenciatura") ~ "Superior",
+      +       str_detect(Escolaridad_std, "tsu|técnic|tecnica") ~ "Técnica",
+      +       str_detect(Escolaridad_std, "preparatoria|bachiller") ~ "Media",
+      +       TRUE ~ "Otro"
+      +     )
+    +   )
+> 
+  > cat("\nDistribución Nivel_Escolaridad:\n")
 
-cat("\n========================================\n")
-cat("TRANSFORMACIÓN DE CAMPOS DE COMPLEJIDAD\n")
-cat("========================================\n")
+Distribución Nivel_Escolaridad:
+  > print(table(datos$Nivel_Escolaridad))
 
-# =========================================================
-# 1️⃣ ESCOLARIDAD → NIVEL MÍNIMO REQUERIDO
-# =========================================================
-datos <- datos %>%
-  mutate(
-    Escolaridad_std = str_to_lower(Escolaridad),
-    Nivel_Escolaridad = case_when(
-      str_detect(Escolaridad_std, "ingenier|licenciatura") ~ "Superior",
-      str_detect(Escolaridad_std, "tsu|técnic|tecnica") ~ "Técnica",
-      str_detect(Escolaridad_std, "preparatoria|bachiller") ~ "Media",
-      TRUE ~ "Otro"
-    )
-  )
+Otro Superior  Técnica 
+1     2354       48 
+> 
+  > # =========================================================
+> # 2️⃣ ESPECIALIZACIÓN → MACRO CATEGORÍA
+  > # =========================================================
+> datos <- datos %>%
+  +   mutate(
+    +     Especializacion_std = str_to_lower(Especialización),
+    +     Macro_Especializacion = case_when(
+      +       str_detect(Especializacion_std, "informática|sistemas|ti|tecnolog") ~ "TI",
+      +       str_detect(Especializacion_std, "derecho") ~ "Legal",
+      +       str_detect(Especializacion_std, "contadur|finanza|econom") ~ "Financiero",
+      +       str_detect(Especializacion_std, "administra|mercadotec") ~ "Administrativo",
+      +       str_detect(Especializacion_std, "ingenier") ~ "Ingeniería",
+      +       TRUE ~ "Otro"
+      +     )
+    +   )
+> 
+  > cat("\nDistribución Macro_Especializacion:\n")
 
-cat("\nDistribución Nivel_Escolaridad:\n")
-print(table(datos$Nivel_Escolaridad))
+Distribución Macro_Especializacion:
+  > print(table(datos$Macro_Especializacion))
 
-# =========================================================
-# 2️⃣ ESPECIALIZACIÓN → MACRO CATEGORÍA
-# =========================================================
-datos <- datos %>%
-  mutate(
-    Especializacion_std = str_to_lower(Especialización),
-    Macro_Especializacion = case_when(
-      str_detect(Especializacion_std, "informática|sistemas|ti|tecnolog") ~ "TI",
-      str_detect(Especializacion_std, "derecho") ~ "Legal",
-      str_detect(Especializacion_std, "contadur|finanza|econom") ~ "Financiero",
-      str_detect(Especializacion_std, "administra|mercadotec") ~ "Administrativo",
-      str_detect(Especializacion_std, "ingenier") ~ "Ingeniería",
-      TRUE ~ "Otro"
-    )
-  )
+Administrativo     Financiero     Ingeniería          Legal           Otro             TI 
+110           1106             24            133             28           1002 
+> 
+  > # =========================================================
+> # 3️⃣ SOFTWARE → CONTEO DE HERRAMIENTAS
+  > # =========================================================
+> contar_herramientas <- function(x) {
+  +   ifelse(
+    +     is.na(x) | trimws(x) == "",
+    +     0,
+    +     str_count(x, ",") + 1
+    +   )
+  + }
+> 
+  > datos <- datos %>%
+  +   mutate(
+    +     N_Software_Avanzado = contar_herramientas(`Software-Avanzado`),
+    +     N_Software_Intermedio = contar_herramientas(`Software-Intermedio`),
+    +     N_Software_Basico = contar_herramientas(`Software-Básico`),
+    +     Total_Software = N_Software_Avanzado + N_Software_Intermedio + N_Software_Basico
+    +   )
+> 
+  > cat("\nResumen Total_Software:\n")
 
-cat("\nDistribución Macro_Especializacion:\n")
-print(table(datos$Macro_Especializacion))
+Resumen Total_Software:
+  > print(summary(datos$Total_Software))
+Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+0.000   1.000   1.000   1.897   1.000  22.000 
+> 
+  > # =========================================================
+> # 4️⃣ INDICADORES DE COMPLEJIDAD
+  > # =========================================================
+> datos <- datos %>%
+  +   mutate(
+    +     Perfil_TI = ifelse(
+      +       Macro_Especializacion == "TI" | N_Software_Avanzado > 0,
+      +       "TI",
+      +       "No TI"
+      +     ),
+    +     Alta_Complejidad = ifelse(
+      +       N_Software_Avanzado >= 2 | Total_Software >= 5,
+      +       "Alta",
+      +       "Estándar"
+      +     )
+    +   )
+> 
+  > cat("\nPerfil_TI:\n")
 
-# =========================================================
-# 3️⃣ SOFTWARE → CONTEO DE HERRAMIENTAS
-# =========================================================
-contar_herramientas <- function(x) {
-  ifelse(
-    is.na(x) | trimws(x) == "",
-    0,
-    str_count(x, ",") + 1
-  )
-}
+Perfil_TI:
+  > print(table(datos$Perfil_TI))
 
-datos <- datos %>%
-  mutate(
-    N_Software_Avanzado = contar_herramientas(`Software-Avanzado`),
-    N_Software_Intermedio = contar_herramientas(`Software-Intermedio`),
-    N_Software_Basico = contar_herramientas(`Software-Básico`),
-    Total_Software = N_Software_Avanzado + N_Software_Intermedio + N_Software_Basico
-  )
+No TI    TI 
+1386  1017 
+> 
+  > cat("\nAlta_Complejidad:\n")
 
-cat("\nResumen Total_Software:\n")
-print(summary(datos$Total_Software))
+Alta_Complejidad:
+  > print(table(datos$Alta_Complejidad))
 
-# =========================================================
-# 4️⃣ INDICADORES DE COMPLEJIDAD
-# =========================================================
-datos <- datos %>%
-  mutate(
-    Perfil_TI = ifelse(
-      Macro_Especializacion == "TI" | N_Software_Avanzado > 0,
-      "TI",
-      "No TI"
-    ),
-    Alta_Complejidad = ifelse(
-      N_Software_Avanzado >= 2 | Total_Software >= 5,
-      "Alta",
-      "Estándar"
-    )
-  )
+Alta Estándar 
+282     2121 
+> 
+  > cat("\n========================================\n")
 
-cat("\nPerfil_TI:\n")
-print(table(datos$Perfil_TI))
-
-cat("\nAlta_Complejidad:\n")
-print(table(datos$Alta_Complejidad))
-
-cat("\n========================================\n")
-cat("FIN DE TRANSFORMACIÓN\n")
-cat("========================================\n")
+========================================
+  > cat("FIN DE TRANSFORMACIÓN\n")
+FIN DE TRANSFORMACIÓN
+> cat("========================================\n")
+========================================
