@@ -34,7 +34,7 @@ datos <- read_excel(file_path) %>%
 # TRANSFORMACIÓN DE VARIABLES NUEVAS
 # =========================================================
 
-# Escolaridad
+# ---- Escolaridad
 datos <- datos %>%
   mutate(
     Escolaridad_std = str_to_lower(Escolaridad),
@@ -46,7 +46,7 @@ datos <- datos %>%
     )
   )
 
-# Especialización
+# ---- Especialización
 datos <- datos %>%
   mutate(
     Especializacion_std = str_to_lower(Especialización),
@@ -60,7 +60,7 @@ datos <- datos %>%
     )
   )
 
-# Software
+# ---- Software
 contar_herramientas <- function(x) {
   ifelse(is.na(x) | trimws(x) == "", 0, str_count(x, ",") + 1)
 }
@@ -73,12 +73,13 @@ datos <- datos %>%
     Total_Software = N_Software_Avanzado + N_Software_Intermedio + N_Software_Basico
   )
 
-# Complejidad
+# ---- Indicadores de complejidad
 datos <- datos %>%
   mutate(
     Perfil_TI = ifelse(
       Macro_Especializacion == "TI" | N_Software_Avanzado > 0,
-      "TI", "No TI"
+      "TI",
+      "No TI"
     ),
     Complejidad_Nivel = case_when(
       Total_Software >= 8 | N_Software_Avanzado >= 2 ~ "Crítica",
@@ -92,11 +93,10 @@ datos <- datos %>%
   )
 
 # =========================================================
-# UTILIDADES
+# FUNCIONES CRÍTICAS DE ROBUSTEZ
 # =========================================================
 
-rmse <- function(y, p) sqrt(mean((y - p)^2, na.rm = TRUE))
-
+# ---- eliminar factores sin variabilidad
 remove_single_level_factors <- function(df) {
   keep <- sapply(df, function(x) {
     if (is.factor(x) || is.character(x)) {
@@ -106,110 +106,98 @@ remove_single_level_factors <- function(df) {
   df[, keep, drop = FALSE]
 }
 
-# 🔹 IMPUTACIÓN ROBUSTA (CLAVE DEL FIX)
+# ---- imputación simple de NA
 impute_missing <- function(df) {
   for (c in colnames(df)) {
     if (is.numeric(df[[c]])) {
-      med <- median(df[[c]], na.rm = TRUE)
-      df[[c]][is.na(df[[c]])] <- med
-    } else {
-      df[[c]] <- as.character(df[[c]])
-      df[[c]][is.na(df[[c]])] <- "MISSING"
-      df[[c]] <- as.factor(df[[c]])
+      df[[c]][is.na(df[[c]])] <- median(df[[c]], na.rm = TRUE)
+    } else if (is.factor(df[[c]])) {
+      df[[c]] <- addNA(df[[c]])
     }
   }
   df
 }
 
-make_feature_matrix <- function(df, cat_vars, num_vars) {
-  df <- df %>% select(all_of(c(cat_vars, num_vars)))
-  df <- df %>% mutate(across(where(is.character), as.factor))
-  df <- remove_single_level_factors(df)
-  df <- impute_missing(df)   # 🔹 AQUÍ SE RESUELVE EL ERROR
+# ---- reducción de cardinalidad (solo para RF)
+reduce_cardinality <- function(df, max_levels = 40) {
+  for (c in colnames(df)) {
+    if (is.factor(df[[c]])) {
+      lvls <- levels(df[[c]])
+      if (length(lvls) > max_levels) {
+        freq <- sort(table(df[[c]]), decreasing = TRUE)
+        keep <- names(freq)[1:max_levels]
+        df[[c]] <- as.character(df[[c]])
+        df[[c]][!df[[c]] %in% keep] <- "OTROS"
+        df[[c]] <- factor(df[[c]])
+      }
+    }
+  }
   df
 }
 
 # =========================================================
-# FUNCIÓN PRINCIPAL DE ANÁLISIS ROBUSTO
+# FEATURE ENGINEERING
 # =========================================================
-analyze_group_full <- function(grupo, data, columnas_interes, nuevos_vars,
-                               improvement_threshold = 0.05) {
+make_feature_matrix <- function(df, cat_vars, num_vars) {
+  df <- df %>% select(all_of(c(cat_vars, num_vars)))
+  df <- df %>% mutate(across(where(is.character), as.factor))
+  df <- remove_single_level_factors(df)
+  df <- impute_missing(df)
+  df <- reduce_cardinality(df, max_levels = 40)
+  df
+}
+
+# =========================================================
+# FUNCIÓN PRINCIPAL DE ANÁLISIS POR GRUPO
+# =========================================================
+analyze_group_full <- function(grupo, data, columnas_interes, nuevos_vars) {
 
   cat("\n============================================================\n")
   cat("ANALIZANDO GRUPO:", grupo, "\n")
   cat("============================================================\n")
 
   df <- data %>% filter(Grupo == grupo)
-  if (nrow(df) < 20) {
-    cat("⚠️ Grupo con pocos registros, se recomienda percentiles\n")
+  y <- df$`Días cobertura con capacitación`
+
+  cat_vars <- intersect(columnas_interes, colnames(df))
+  num_vars <- intersect(nuevos_vars, colnames(df))
+
+  X <- make_feature_matrix(df, cat_vars, num_vars)
+
+  if (ncol(X) < 2) {
+    cat("⚠️ No hay suficientes variables para modelar\n")
     return(NULL)
   }
 
-  y <- df$`Días cobertura con capacitación`
-
-  X <- make_feature_matrix(
-    df,
-    cat_vars = intersect(columnas_interes, names(df)),
-    num_vars = intersect(nuevos_vars, names(df))
-  )
-
-  set.seed(999)
-  idx <- sample(seq_len(nrow(X)), size = floor(0.75 * nrow(X)))
+  idx <- sample(seq_len(nrow(X)), size = floor(0.7 * nrow(X)))
   X_train <- X[idx, ]
   X_test  <- X[-idx, ]
   y_train <- y[idx]
   y_test  <- y[-idx]
 
-  baseline_pred <- rep(median(y_train), length(y_test))
-  baseline_rmse <- rmse(y_test, baseline_pred)
+  resultados <- list()
 
-  resultados <- data.frame(Modelo = character(), RMSE = numeric(), Mejora = numeric())
+  # ---- Árbol
+  try({
+    tree_fit <- rpart(y_train ~ ., data = X_train, control = rpart.control(cp = 0.01))
+    tree_pred <- predict(tree_fit, X_test)
+    resultados$Arbol <- sqrt(mean((y_test - tree_pred)^2))
+  }, silent = TRUE)
 
-  # Árbol
-  tree_fit <- rpart(y_train ~ ., data = X_train, control = rpart.control(cp = 0.01))
-  tree_pred <- predict(tree_fit, X_test)
-  tree_rmse <- rmse(y_test, tree_pred)
-  resultados <- rbind(resultados,
-                      data.frame(Modelo = "Arbol",
-                                 RMSE = tree_rmse,
-                                 Mejora = (baseline_rmse - tree_rmse) / baseline_rmse))
-
-  # Random Forest
-  if (nrow(X_train) >= 30) {
+  # ---- Random Forest
+  try({
     rf_fit <- randomForest(x = X_train, y = y_train, ntree = 300)
     rf_pred <- predict(rf_fit, X_test)
-    rf_rmse <- rmse(y_test, rf_pred)
-    resultados <- rbind(resultados,
-                        data.frame(Modelo = "RandomForest",
-                                   RMSE = rf_rmse,
-                                   Mejora = (baseline_rmse - rf_rmse) / baseline_rmse))
-  }
+    resultados$RandomForest <- sqrt(mean((y_test - rf_pred)^2))
+  }, silent = TRUE)
 
-  best <- resultados[which.min(resultados$RMSE), ]
-  usar_modelo <- best$Mejora >= improvement_threshold
+  # ---- Baseline
+  resultados$Baseline_Mediana <- sqrt(mean((y_test - median(y))^2))
 
-  cat("\nResultados modelos:\n")
+  cat("\nRMSE por modelo:\n")
   print(resultados)
-  cat("Baseline RMSE:", round(baseline_rmse, 2), "\n")
 
-  if (usar_modelo) {
-    cat("✅ MODELO RECOMENDADO:", best$Modelo, "\n")
-  } else {
-    cat("⚠️ MEJOR USAR PERCENTILES\n")
-  }
-
-  write.csv(resultados,
-            file.path(output_dir, paste0("metricas_", grupo, ".csv")),
-            row.names = FALSE)
-
-  list(
-    baseline = median(y_train),
-    baseline_rmse = baseline_rmse,
-    mejor_modelo = best$Modelo,
-    rmse = best$RMSE,
-    mejora = best$Mejora,
-    usar_modelo = usar_modelo
-  )
+  resultados
 }
 
 # =========================================================
@@ -217,7 +205,10 @@ analyze_group_full <- function(grupo, data, columnas_interes, nuevos_vars,
 # =========================================================
 grupos_obj <- unique(datos$Grupo)
 
-columnas_interes <- setdiff(colnames(datos), "Días cobertura con capacitación")
+columnas_interes <- setdiff(
+  colnames(datos),
+  c("Días cobertura con capacitación")
+)
 
 nuevos_vars <- c(
   "Indice_Complejidad",
@@ -237,6 +228,5 @@ for (g in grupos_obj) {
 }
 
 cat("\n==============================\n")
-cat("FIN DEL ANÁLISIS ROBUSTO\n")
+cat("FIN DEL ANÁLISIS COMPLETO\n")
 cat("==============================\n")
-
