@@ -203,3 +203,79 @@ for (grp in sort(unique(datos$Grupo))) {
 
 cat("\n✔ Análisis completado sin errores\n")
 cat("Resultados en:", output_dir, "\n")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ESCOLARIDAD
+Preparatoria
+TSU
+Grado
+Post-Grado
+
+
+
+
+ESPECIALIZACIÓN
+Ciencias de la Salud
+Ciencias Económico-Administrativas
+Ciencias Exactas y Tecnología
+Ciencias Sociales y Humanidades
+Ingenierías y Ciencias Aplicadas
+Perfil Técnico Especializado
+
+
+AVANZADO
+Automatización de Pruebas/QA
+Desarrollo/Programación
+Diseño Multimedia
+ERP/Sistemas Empresariales
+Ofimática Básica
+Sistemas Operativos
+
+
+INTERMEDIO
+Análisis de Datos
+Automatización de Pruebas/QA
+Bases de Datos
+Desarrollo/Programación
+Desarrollo/Programación + Diseño Multimedia
+Diseño Multimedia
+ERP/Sistemas Empresariales
+ERP/Sistemas Empresariales + Infraestructura TI
+Infraestructura TI
+Ofimática Básica
+Seguridad Informática
+
+
+BASICO
+Análisis de Datos
+Análisis de Datos/Big Data
+Desarrollo/Programación
+Diseño Multimedia
+ERP/Sistemas Empresariales
+Ofimática Básica
