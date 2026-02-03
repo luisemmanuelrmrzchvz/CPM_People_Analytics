@@ -796,3 +796,92 @@ if (run_heavy_models) {
   }, silent = TRUE)
 }
 cat("\nFIN DEL PROCESO. Revisa la carpeta:", output_dir, "\n")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+> for (g in grupos_obj) {
+  +   # Aproximación A: originales
+    +   resA <- analyze_group_full(g, datos, columnas_interes = setdiff(columnas_interes, "Días cobertura con capacitación"), nuevos_vars = nuevos_vars, approach_name = "A_originales")
+    +   resultados_grupos[[paste0(g, "_A")]] <- resA
+    + 
+      +   # Aproximación B: originales + nuevos
+      +   resB <- analyze_group_full(g, datos, columnas_interes = setdiff(columnas_interes, "Días cobertura con capacitación"), nuevos_vars = nuevos_vars, approach_name = "B_originales_nuevos")
+      +   resultados_grupos[[paste0(g, "_B")]] <- resB
+      + }
+
+============================================================ 
+  ANALIZANDO GRUPO: SUCURSAL - Aproximación: A_originales 
+============================================================ 
+  
+  Evaluando agrupadores (esto puede tardar)...
+Evaluación agrupadores guardada.
+
+Ranking (top 10):
+  agrupador grupos_n eta_squared cv_promedio score_combinado
+1      DescripcionCC       33  0.16649334   0.4822517      0.32358014
+2 Tabulador Salarial        2  0.01171587   0.5834491      0.26439180
+3    Puesto Generico        3  0.01555260   0.5218604      0.24282532
+4  Nombre Reclutador       47  0.11733342   0.4777418      0.21674290
+5             Estado       25  0.05688327   0.5393924      0.17552924
+6              Plaza       27  0.07369746   0.5162302      0.16350342
+7           Regional        6  0.01501629   0.5825277      0.06152703
+
+Mejor agrupador sugerido: DescripcionCC 
+
+=== EVALUACIÓN DE VIABILIDAD DEL AGRUPADOR ===
+  
+  1. PODER EXPLICATIVO (eta-squared): 0.1665 
+✅ ADECUADO: Explica más del 15% de la variación
+
+2. HOMOGENEIDAD (CV promedio): 0.482 
+✅ BUENA HOMOGENEIDAD: CV < 0.5
+
+3. PARSIMONIA (número de grupos): 33 
+(Tamaño mínimo grupo: 5 , máximo: 51 )
+⚠️ GRANULARIDAD ALTA: Muchos grupos para gestionar
+
+4. DIFERENCIACIÓN (rango de medias): 47.8 días
+✅ DIFERENCIACIÓN MODERADA
+
+5. SCORE DE VIABILIDAD GLOBAL: 0.422 / 1.0
+⚠️ LIMITADAMENTE VIABLE - Necesita mejoras
+
+6. RECOMENDACIÓN ESPECÍFICA:
+  • EVALUAR AGRUPADORES MÁS AGRUPADOS (demasiados grupos) 
+
+Generando goals por DescripcionCC ...
+Goals por subgrupo guardados en goals_recomendados.xlsx
+
+Ejecutando clustering (PCA + Kmeans) para explorar patrones naturales...
+
+Modelado predictivo: comparando modelos y baseline (percentiles)...
+Error en `contrasts<-`(`*tmp*`, value = contr.funs[1 + isOF[nn]]): 
+  contrasts can be applied only to factors with 2 or more levels
+Called from: `contrasts<-`(`*tmp*`, value = contr.funs[1 + isOF[nn]])
