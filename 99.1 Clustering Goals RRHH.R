@@ -221,6 +221,24 @@ cat("Resultados en:", output_dir, "\n")
 
 
 
+CAMPO	|	CONTIENE	|	RETO
+Grupo	|	Nivel de Gestión (ODG, COBRANZA, PLAZA, SUCURSAL)	|	Macro Niveles de Gestión (ODG -> Posiciones Corporativas)
+Regional	|	Subagrupador de zonas operativas	|	6 regiones de México + ODG
+Plaza	|	Centros de subnivel de regionales que administran un grupo de sucursales	|	27 plazas + ODG
+DescripcionCC	|	Centros de Costos	|	En ODG los centros de costos son Departamento, pero en PLAZA y COBRANZA son los centros regionales de administración de sucursales, SUCURSAL cada centro de costos es una sucursal de más de 500
+Estado	|	Entidad Federativa de México	|	Una regional puede agrupar varios estados
+Nombre Reclutador	|	Colaborador que hizo proceso de contratación	|	92 reclutadores registrados, aunque no se tiene registro de 132 contrataciones quien fue el reclutador (NULL); de un total de 5,148 contrataciones que se tuvieron en el periodo
+Perfil Profesional	|	Agrupador de Perfiles por su enfoque de actividades	|	8 combinaciones
+Segmento de puesto	|	Agrupador de Enfoque de Puesto para la Organización	|	4 grupos, partiendo de operativo, especializado, táctivo hasta estrátegico
+Area de Personal	|	Agrupador de tipo de colaborador (contrato)	|	Si el colaborador es de confianza o sindicaliza, como un nivel funcionario (superior a Confianza)
+Puesto Generico	|	Agrupador de puestos por niveles genéricos de puestos	|	
+  Familia de Puesto	|	División de unidades de negocio, superior a departamentos	|	
+  Escolaridad	|	Grados de Estudio Mínimo	|	
+  Especialización	|	Área de Estudio enfocada	|	
+  Software-Avanzado	|	Software indipensable nivel experto	|	
+  Software-Básico	|	Software indipensable nivel básico	|	
+  Software-Intermedio	|	Software indipensable nivel intermedio	|	
+  
 
 
 
@@ -230,52 +248,3 @@ cat("Resultados en:", output_dir, "\n")
 
 
 
-
-ESCOLARIDAD
-Preparatoria
-TSU
-Grado
-Post-Grado
-
-
-
-
-ESPECIALIZACIÓN
-Ciencias de la Salud
-Ciencias Económico-Administrativas
-Ciencias Exactas y Tecnología
-Ciencias Sociales y Humanidades
-Ingenierías y Ciencias Aplicadas
-Perfil Técnico Especializado
-
-
-AVANZADO
-Automatización de Pruebas/QA
-Desarrollo/Programación
-Diseño Multimedia
-ERP/Sistemas Empresariales
-Ofimática Básica
-Sistemas Operativos
-
-
-INTERMEDIO
-Análisis de Datos
-Automatización de Pruebas/QA
-Bases de Datos
-Desarrollo/Programación
-Desarrollo/Programación + Diseño Multimedia
-Diseño Multimedia
-ERP/Sistemas Empresariales
-ERP/Sistemas Empresariales + Infraestructura TI
-Infraestructura TI
-Ofimática Básica
-Seguridad Informática
-
-
-BASICO
-Análisis de Datos
-Análisis de Datos/Big Data
-Desarrollo/Programación
-Diseño Multimedia
-ERP/Sistemas Empresariales
-Ofimática Básica
