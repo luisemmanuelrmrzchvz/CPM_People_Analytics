@@ -1,5 +1,5 @@
 # =========================================================
-# EXPLORACIÓN DE VIABILIDAD DE COMBINACIONES (ROBUSTO)
+# EXPLORACIÓN DE COMBINACIONES Y VIABILIDAD DE MÉTODOS
 # =========================================================
 
 library(readxl)
@@ -8,7 +8,7 @@ library(stringr)
 library(tidyr)
 library(purrr)
 library(cluster)
-library(rpart)
+library(stringi)
 
 set.seed(123)
 
@@ -24,7 +24,7 @@ min_n <- 15
 datos_raw <- read_excel(file_path)
 
 # =========================
-# NORMALIZACIÓN DE NOMBRES
+# NORMALIZAR NOMBRES (interno)
 # =========================
 clean_names <- function(x) {
   x %>%
@@ -35,25 +35,14 @@ clean_names <- function(x) {
     str_replace_all("^_|_$", "")
 }
 
-colnames(datos_raw) <- clean_names(colnames(datos_raw))
+orig_names <- colnames(datos_raw)
+colnames(datos_raw) <- clean_names(orig_names)
 
 # =========================
-# DETECCIÓN AUTOMÁTICA DE TARGET
+# MAPEO FIJO DE COLUMNAS
 # =========================
-target_col <- colnames(datos_raw)[
-  str_detect(colnames(datos_raw), "dias") &
-  str_detect(colnames(datos_raw), "cobertura")
-]
+target_col <- "dias_cobertura_con_capacitacion"
 
-if (length(target_col) != 1) {
-  stop("❌ No se pudo identificar de forma única la columna de días de cobertura")
-}
-
-cat("✔ Columna target detectada:", target_col, "\n")
-
-# =========================
-# LIMPIEZA BÁSICA
-# =========================
 datos <- datos_raw %>%
   filter(
     !is.na(.data[[target_col]]),
@@ -63,18 +52,36 @@ datos <- datos_raw %>%
 # =========================
 # VARIABLES DE INTERÉS
 # =========================
-vars_estructura <- c("regional", "plaza", "descripcioncc", "estado")
-vars_gestion    <- c("nombre_reclutador", "area_de_personal")
-vars_puesto     <- c("perfil_profesional", "segmento_de_puesto",
-                     "puesto_generico", "familia_de_puesto")
-vars_formacion  <- c("escolaridad", "especializacion")
-vars_tecnicas   <- c("software_avanzado", "software_intermedio", "software_basico")
-
-vars_all <- intersect(
-  c(vars_estructura, vars_gestion, vars_puesto,
-    vars_formacion, vars_tecnicas),
-  colnames(datos)
+vars_estructura <- c(
+  "regional", "plaza", "descripcioncc", "estado"
 )
+
+vars_gestion <- c(
+  "nombre_reclutador", "area_de_personal"
+)
+
+vars_puesto <- c(
+  "perfil_profesional", "segmento_de_puesto",
+  "puesto_generico", "familia_de_puesto"
+)
+
+vars_formacion <- c(
+  "escolaridad", "especializacion"
+)
+
+vars_tecnicas <- c(
+  "software_avanzado", "software_intermedio", "software_basico"
+)
+
+vars_all <- c(
+  vars_estructura,
+  vars_gestion,
+  vars_puesto,
+  vars_formacion,
+  vars_tecnicas
+)
+
+vars_all <- intersect(vars_all, colnames(datos))
 
 # =========================
 # MÉTRICAS
@@ -82,14 +89,15 @@ vars_all <- intersect(
 cv <- function(x) sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE)
 
 eta_squared <- function(y, g) {
-  grand_mean <- mean(y)
-  ss_total <- sum((y - grand_mean)^2)
+  grand_mean <- mean(y, na.rm = TRUE)
+  ss_total <- sum((y - grand_mean)^2, na.rm = TRUE)
   ss_between <- sum(tapply(y, g, function(x)
-    length(x) * (mean(x) - grand_mean)^2))
+    length(x) * (mean(x, na.rm = TRUE) - grand_mean)^2), na.rm = TRUE)
+  if (ss_total == 0) return(0)
   ss_between / ss_total
 }
 
-evaluate_grouping <- function(df, vars, target_col) {
+evaluate_grouping <- function(df, vars) {
 
   df <- df %>%
     mutate(grp = interaction(across(all_of(vars)), drop = TRUE))
@@ -109,117 +117,65 @@ evaluate_grouping <- function(df, vars, target_col) {
     Grupos = length(unique(g)),
     Min_n = min(table(g)),
     Eta2 = eta_squared(y, g),
-    CV_prom = mean(tapply(y, g, cv)),
-    Rango_medias = diff(range(tapply(y, g, median))),
+    CV_prom = mean(tapply(y, g, cv), na.rm = TRUE),
+    Rango_medias = diff(range(tapply(y, g, median), na.rm = TRUE)),
     stringsAsFactors = FALSE
   )
 }
 
 # =========================
-# COMBINACIONES CONTROLADAS
+# COMBINACIONES (1 a 3 variables)
 # =========================
-capas <- list(
-  estructura = vars_estructura,
-  gestion    = vars_gestion,
-  puesto     = vars_puesto,
-  formacion  = vars_formacion,
-  tecnica    = vars_tecnicas
-)
-
 combos <- list()
 
 # 1 variable
-combos <- c(combos, lapply(vars_all, function(v) c(v)))
+combos <- c(combos, lapply(vars_all, c))
 
-# 2 variables lógicas
-for (i in seq_along(capas)) {
-  for (j in i:length(capas)) {
-    v1 <- intersect(capas[[i]], vars_all)
-    v2 <- intersect(capas[[j]], vars_all)
+# 2 variables
+combos <- c(combos, combn(vars_all, 2, simplify = FALSE))
 
-    if (length(v1) > 0 && length(v2) > 0) {
-      cmb <- expand.grid(v1, v2, stringsAsFactors = FALSE)
-      cmb <- cmb[cmb[,1] != cmb[,2], ]
-      combos <- c(combos, split(cmb, seq(nrow(cmb))))
-    }
-  }
+# 3 variables (limitado para no explotar)
+set.seed(123)
+combos_3 <- combn(vars_all, 3, simplify = FALSE)
+if (length(combos_3) > 150) {
+  combos_3 <- sample(combos_3, 150)
 }
-
-combos <- unique(lapply(combos, sort))
+combos <- c(combos, combos_3)
 
 # =========================
 # EJECUCIÓN POR GRUPO
 # =========================
 resultados <- list()
 
-for (grp in sort(unique(datos$grupo))) {
+for (g in sort(unique(datos$grupo))) {
 
-  cat("\n=========================\n")
-  cat("GRUPO:", grp, "\n")
-  cat("=========================\n")
+  cat("\n=================================================\n")
+  cat("ANALIZANDO GRUPO:", g, "\n")
+  cat("=================================================\n")
 
-  df_g <- datos %>% filter(grupo == grp)
+  df_g <- datos %>% filter(grupo == g)
 
-  res_grp <- map_dfr(
+  res <- map_dfr(
     combos,
-    ~ evaluate_grouping(df_g, .x, target_col)
+    ~ evaluate_grouping(df_g, .x)
   )
 
-  if (nrow(res_grp) > 0) {
-    res_grp <- res_grp %>%
+  if (!is.null(res) && nrow(res) > 0) {
+
+    res <- res %>%
       mutate(
-        Score = 0.4 * Eta2 +
-                0.3 * (1 / CV_prom) +
-                0.3 * (1 / Grupos)
+        Score = 0.45 * Eta2 +
+                0.35 * (1 / (CV_prom + 1e-6)) +
+                0.20 * (1 / (Grupos + 1e-6))
       ) %>%
       arrange(desc(Score))
 
-    resultados[[grp]] <- res_grp
-    print(head(res_grp, 10))
+    resultados[[g]] <- res
+
+    print(head(res, 12))
+  } else {
+    cat("Sin combinaciones viables para este grupo\n")
   }
 }
 
-cat("\n✔ Exploración de combinaciones finalizada\n")
-
-
-
-
-
-
-
-
-
-
-
-
-Año
-Mes
-IDColaborador
-Nombre
-Evento
-MotivoEvento
-FechaEfectiva
-IDPosicion
-CentroCostos
-DescripcionCC
-Puesto
-Grupo
-Regional
-Plaza
-Estado
-Nombre Reclutador
-FechaVacante
-Fecha término de capacitación
-Días cobertura con capacitación
-Perfil Profesional
-Segmento de puesto
-Tabulador Salarial
-Area de Personal
-Puesto Generico
-Familia de Puesto
-Escolaridad
-Especialización
-Software-Avanzado
-Software-Básico
-Software-Intermedio
-
+cat("\n✔ Exploración de combinaciones completada\n")
