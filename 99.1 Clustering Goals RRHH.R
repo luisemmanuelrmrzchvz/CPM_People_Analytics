@@ -321,3 +321,39 @@ cat("\nArchivos generados en:", output_dir, "\n")
 cat(" - Excel con incrementos por grupo y pooled\n")
 cat(" - Gráficos PNG por variable\n")
 cat("\nEJECUCIÓN FINALIZADA.\n")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
++   # Bind results for group
+  +   all_v <- bind_rows(grp_results)
++   all_num <- bind_rows(num_results)
++   results_list[[as.character(grp)]] <- list(cat = all_v, num = all_num)
++   # Save intermediate files
+  +   if (!is.null(all_v) && nrow(all_v)>0) write_xlsx(all_v, file.path(output_dir, paste0("incrementos_", grp, "_categoricas.xlsx")))
++   if (!is.null(all_num) && nrow(all_num)>0) write_xlsx(all_num, file.path(output_dir, paste0("incrementos_", grp, "_numericas.xlsx")))
++ }
+
+--- Grupo: COBRANZA  ---
+  Registros: 670  Mediana grupo: 41 
+Error en cut.default(df_g[[nv]], breaks = unique(q), include.lowest = TRUE, : 
+                       El número de intervalos y la longitud de las 'etiquetas' difieren
