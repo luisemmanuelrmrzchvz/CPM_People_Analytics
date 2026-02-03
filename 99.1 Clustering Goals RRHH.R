@@ -94,6 +94,9 @@ datos <- datos %>%
 # =========================================================
 # UTILIDADES
 # =========================================================
+
+rmse <- function(y, p) sqrt(mean((y - p)^2, na.rm = TRUE))
+
 remove_single_level_factors <- function(df) {
   keep <- sapply(df, function(x) {
     if (is.factor(x) || is.character(x)) {
@@ -103,14 +106,28 @@ remove_single_level_factors <- function(df) {
   df[, keep, drop = FALSE]
 }
 
+# 🔹 IMPUTACIÓN ROBUSTA (CLAVE DEL FIX)
+impute_missing <- function(df) {
+  for (c in colnames(df)) {
+    if (is.numeric(df[[c]])) {
+      med <- median(df[[c]], na.rm = TRUE)
+      df[[c]][is.na(df[[c]])] <- med
+    } else {
+      df[[c]] <- as.character(df[[c]])
+      df[[c]][is.na(df[[c]])] <- "MISSING"
+      df[[c]] <- as.factor(df[[c]])
+    }
+  }
+  df
+}
+
 make_feature_matrix <- function(df, cat_vars, num_vars) {
   df <- df %>% select(all_of(c(cat_vars, num_vars)))
   df <- df %>% mutate(across(where(is.character), as.factor))
   df <- remove_single_level_factors(df)
+  df <- impute_missing(df)   # 🔹 AQUÍ SE RESUELVE EL ERROR
   df
 }
-
-rmse <- function(y, p) sqrt(mean((y - p)^2, na.rm = TRUE))
 
 # =========================================================
 # FUNCIÓN PRINCIPAL DE ANÁLISIS ROBUSTO
@@ -123,27 +140,25 @@ analyze_group_full <- function(grupo, data, columnas_interes, nuevos_vars,
   cat("============================================================\n")
 
   df <- data %>% filter(Grupo == grupo)
-  if (nrow(df) < 15) {
-    cat("⚠️ Pocos registros. Omitido.\n")
+  if (nrow(df) < 20) {
+    cat("⚠️ Grupo con pocos registros, se recomienda percentiles\n")
     return(NULL)
   }
 
   y <- df$`Días cobertura con capacitación`
+
   X <- make_feature_matrix(
     df,
     cat_vars = intersect(columnas_interes, names(df)),
     num_vars = intersect(nuevos_vars, names(df))
   )
 
-  if (ncol(X) < 2) {
-    cat("⚠️ Insuficientes variables.\n")
-    return(NULL)
-  }
-
   set.seed(999)
   idx <- sample(seq_len(nrow(X)), size = floor(0.75 * nrow(X)))
-  X_train <- X[idx, ]; y_train <- y[idx]
-  X_test  <- X[-idx, ]; y_test <- y[-idx]
+  X_train <- X[idx, ]
+  X_test  <- X[-idx, ]
+  y_train <- y[idx]
+  y_test  <- y[-idx]
 
   baseline_pred <- rep(median(y_train), length(y_test))
   baseline_rmse <- rmse(y_test, baseline_pred)
@@ -175,12 +190,12 @@ analyze_group_full <- function(grupo, data, columnas_interes, nuevos_vars,
 
   cat("\nResultados modelos:\n")
   print(resultados)
-  cat("\nBaseline RMSE:", round(baseline_rmse, 2), "\n")
+  cat("Baseline RMSE:", round(baseline_rmse, 2), "\n")
 
   if (usar_modelo) {
-    cat("✅ Usar modelo:", best$Modelo, "\n")
+    cat("✅ MODELO RECOMENDADO:", best$Modelo, "\n")
   } else {
-    cat("⚠️ Usar percentiles (modelo no mejora lo suficiente)\n")
+    cat("⚠️ MEJOR USAR PERCENTILES\n")
   }
 
   write.csv(resultados,
@@ -225,40 +240,3 @@ cat("\n==============================\n")
 cat("FIN DEL ANÁLISIS ROBUSTO\n")
 cat("==============================\n")
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-> resultados_finales <- list()
-> 
-  > for (g in grupos_obj) {
-    +   resultados_finales[[g]] <- analyze_group_full(
-      +     grupo = g,
-      +     data = datos,
-      +     columnas_interes = columnas_interes,
-      +     nuevos_vars = nuevos_vars
-      +   )
-    + }
-
-============================================================
-  ANALIZANDO GRUPO: COBRANZA 
-============================================================
-  Error en randomForest.default(x = X_train, y = y_train, ntree = 300): 
-  NA not permitted in predictors
-Called from: randomForest.default(x = X_train, y = y_train, ntree = 300)
