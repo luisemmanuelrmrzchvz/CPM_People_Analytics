@@ -914,3 +914,1310 @@ if (length(resultados_grupos) > 0) {
 } else {
   cat("\nNo se pudo realizar análisis para ningún grupo.\n")
 }
+
+
+
+
+
+
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+##########################################################################################################################################
+
+
+
+> # CARGAR LIBRERÍAS NECESARIAS
+  > library(readxl)
+> library(dplyr)
+> library(cluster)
+> library(factoextra)
+> library(purrr)
+> library(ggplot2)
+> library(writexl)
+> library(tidyr)
+> library(gridExtra)
+> library(rpart)          # Para árboles de decisión
+> library(rpart.plot)     # Para visualizar árboles
+> library(caret)          # Para modelos predictivos
+> library(randomForest)   # Para modelos más avanzados
+> 
+  > # DEFINIR DIRECTORIO PARA GUARDAR RESULTADOS
+  > output_dir <- "C:/Users/racl26345/Documents/Reportes Automatizados/Goal Días Cobertura"
+> if (!dir.exists(output_dir)) {
+  +   dir.create(output_dir, recursive = TRUE)
+  + }
+> 
+  > # CARGAR LOS DATOS
+  > file_path <- "C:/Users/racl26345/Documents/Reportes Automatizados/Inputs/Detalle Días de Coberturas.xlsx"
+> datos <- read_excel(file_path)
+> 
+  > # VERIFICAR QUE LA COLUMNA 'Grupo' EXISTA
+  > if (!"Grupo" %in% colnames(datos)) {
+    +   stop("Error: La columna 'Grupo' no se encuentra en los datos. Verifica el nombre de la columna.")
+    + }
+> 
+  > # VERIFICAR QUE LA COLUMNA 'Nombre Reclutador' EXISTA
+  > if (!"Nombre Reclutador" %in% colnames(datos)) {
+    +   cat("ADVERTENCIA: La columna 'Nombre Reclutador' no se encuentra en los datos.\n")
+    +   incluir_reclutador <- FALSE
+    + } else {
+      +   incluir_reclutador <- TRUE
+      + }
+> 
+  > # SELECCIONAR Y PREPARAR COLUMNAS DE INTERÉS
+  > columnas_base <- c(
+    +   "Días cobertura con capacitación",
+    +   "Grupo",
+    +   "DescripcionCC",
+    +   "Perfil Profesional", 
+    +   "Segmento de puesto",
+    +   "Tabulador Salarial",
+    +   "Area de Personal",
+    +   "Puesto Generico",
+    +   "Familia de Puesto",
+    +   "Regional",
+    +   "Plaza",
+    +   "Estado"
+    + )
+> 
+  > if (incluir_reclutador) {
+    +   columnas_interes <- c(columnas_base, "Nombre Reclutador")
+    + } else {
+      +   columnas_interes <- columnas_base
+      + }
+> 
+  > # Limpiar datos
+  > datos_limpieza <- datos %>%
+  +   select(all_of(columnas_interes)) %>%
+  +   mutate(across(-c(`Días cobertura con capacitación`), as.factor)) %>%
+  +   filter(!is.na(`Días cobertura con capacitación`), !is.na(Grupo))
+> 
+  > # DEFINIR LOS GRUPOS A ANALIZAR
+  > grupos <- c("SUCURSAL", "COBRANZA", "PLAZA", "ODG")
+> 
+  > # ======================================================================
+> # MÉTODO 1: ÁRBOLES DE DECISIÓN (SEGMENTACIÓN SUPERVISADA)
+  > # ======================================================================
+> 
+  > crear_segmentos_arbol <- function(datos_grupo, grupo_nombre, grupo_dir) {
+    +   cat("\nMÉTODO 1: CREANDO SEGMENTOS CON ÁRBOL DE DECISIÓN...\n")
+    +   
+      +   tryCatch({
+        +     # Preparar datos para el árbol (excluir variables con muchos niveles)
+          +     datos_arbol <- datos_grupo %>%
+            +       select(-Grupo)
+          +     
+            +     # Excluir variables con más de 20 categorías para evitar sobreajuste
+            +     n_categorias <- sapply(datos_arbol, function(x) if(is.factor(x)) length(unique(x)) else 0)
+            +     vars_muchos_niveles <- names(n_categorias[n_categorias > 20])
+            +     
+              +     if (length(vars_muchos_niveles) > 0) {
+                +       cat("  Excluyendo variables con >20 categorías:", paste(vars_muchos_niveles, collapse = ", "), "\n")
+                +       datos_arbol <- datos_arbol %>%
+                  +         select(-all_of(vars_muchos_niveles))
+                +     }
+            +     
+              +     # Crear árbol de decisión
+              +     set.seed(123)
+            +     formula_arbol <- as.formula("`Días cobertura con capacitación` ~ .")
+            +     arbol <- rpart(formula_arbol, 
+                                 +                    data = datos_arbol, 
+                                 +                    method = "anova",
+                                 +                    control = rpart.control(
+                                   +                      minsplit = 10,     # Mínimo 10 observaciones para dividir
+                                   +                      minbucket = 5,     # Mínimo 5 observaciones en nodo terminal
+                                   +                      cp = 0.01,         # Complejidad mínima
+                                   +                      maxdepth = 5       # Máxima profundidad
+                                   +                    ))
+            +     
+              +     # Obtener segmentos (nodos terminales)
+              +     datos_grupo$segmento_arbol <- as.factor(arbol$where)
+              +     
+                +     # Análisis de segmentos del árbol
+                +     analisis_segmentos <- datos_grupo %>%
+                  +       group_by(segmento_arbol) %>%
+                  +       summarise(
+                    +         n = n(),
+                    +         media_dias = mean(`Días cobertura con capacitación`, na.rm = TRUE),
+                    +         mediana_dias = median(`Días cobertura con capacitación`, na.rm = TRUE),
+                    +         sd_dias = sd(`Días cobertura con capacitación`, na.rm = TRUE),
+                    +         min_dias = min(`Días cobertura con capacitación`, na.rm = TRUE),
+                    +         max_dias = max(`Días cobertura con capacitación`, na.rm = TRUE),
+                    +         q1 = quantile(`Días cobertura con capacitación`, 0.25, na.rm = TRUE),
+                    +         q3 = quantile(`Días cobertura con capacitación`, 0.75, na.rm = TRUE),
+                    +         goal_mediana = round(mediana_dias),
+                    +         goal_p75 = round(quantile(`Días cobertura con capacitación`, 0.75, na.rm = TRUE)),
+                    +         goal_p25 = round(quantile(`Días cobertura con capacitación`, 0.25, na.rm = TRUE)),
+                    +         .groups = 'drop'
+                    +       ) %>%
+                  +       arrange(mediana_dias)
+                +     
+                  +     # Calcular métricas de calidad del árbol
+                  +     r2_arbol <- 1 - sum((datos_grupo$`Días cobertura con capacitación` - predict(arbol))^2) / 
+                    +       sum((datos_grupo$`Días cobertura con capacitación` - mean(datos_grupo$`Días cobertura con capacitación`, na.rm = TRUE))^2)
+                  +     
+                    +     # Visualizar el árbol
+                    +     png(file.path(grupo_dir, "arbol_decision_segmentos.png"), width = 1200, height = 800)
+                  +     rpart.plot(arbol, 
+                                   +                main = paste("Segmentación por Árbol de Decisión -", grupo_nombre),
+                                   +                sub = paste("R² =", round(r2_arbol, 3)),
+                                   +                box.palette = "Blues",
+                                   +                shadow.col = "gray",
+                                   +                nn = TRUE)
+                  +     dev.off()
+                  +     
+                    +     # Gráfico de segmentos del árbol
+                    +     p_segmentos <- ggplot(analisis_segmentos, aes(x = reorder(segmento_arbol, mediana_dias), y = mediana_dias)) +
+                      +       geom_col(fill = "steelblue", alpha = 0.8) +
+                      +       geom_errorbar(aes(ymin = q1, ymax = q3), width = 0.2, color = "darkred") +
+                      +       geom_text(aes(label = paste("n =", n)), vjust = -0.5, size = 3) +
+                      +       geom_text(aes(label = paste("Goal:", goal_mediana)), vjust = 1.5, size = 3, color = "white") +
+                      +       labs(title = paste("Segmentos del Árbol de Decisión -", grupo_nombre),
+                                   +            x = "Segmento (Nodo Terminal)",
+                                   +            y = "Días de Cobertura (mediana)") +
+                      +       theme_minimal()
+                    +     
+                      +     ggsave(file.path(grupo_dir, "segmentos_arbol.png"), p_segmentos, width = 10, height = 6, dpi = 300)
+                    +     
+                      +     # Guardar análisis
+                      +     write_xlsx(analisis_segmentos, file.path(grupo_dir, "segmentos_arbol.xlsx"))
+                    +     
+                      +     cat("  Árbol de decisión creado con", nrow(analisis_segmentos), "segmentos\n")
+                    +     cat("  R² del árbol:", round(r2_arbol, 3), "\n")
+                    +     
+                      +     return(list(
+                        +       analisis = analisis_segmentos,
+                        +       arbol = arbol,
+                        +       r2 = r2_arbol
+                        +     ))
+                    +     
+                      +   }, error = function(e) {
+                        +     cat("  Error en árbol de decisión:", e$message, "\n")
+                        +     return(NULL)
+                        +   })
+    + }
+> 
+  > # ======================================================================
+> # MÉTODO 2: MODELO DE REGRESIÓN + SEGMENTACIÓN POR PERCENTILES
+  > # ======================================================================
+> 
+  > crear_segmentos_regresion <- function(datos_grupo, grupo_nombre, grupo_dir) {
+    +   cat("\nMÉTODO 2: CREANDO SEGMENTOS CON MODELO DE REGRESIÓN...\n")
+    +   
+      +   tryCatch({
+        +     # Preparar datos para modelo (convertir factores a dummy, excluir niveles con pocas observaciones)
+          +     datos_modelo <- datos_grupo
+          +     
+            +     # Crear modelo lineal simple (podría mejorarse con random forest o GBM)
+            +     # Primero, seleccionar las variables más importantes mediante correlación/ANOVA
+            +     
+            +     # Análisis de varianza para cada variable categórica
+            +     vars_categoricas <- names(datos_modelo)[sapply(datos_modelo, is.factor)]
+            +     vars_categoricas <- setdiff(vars_categoricas, c("Grupo", "segmento_arbol"))
+            +     
+              +     # Calcular eta-squared para cada variable
+              +     eta_squared_vars <- map_dfr(vars_categoricas, function(var) {
+                +       if (length(unique(datos_modelo[[var]])) > 1) {
+                  +         modelo <- aov(as.formula(paste("`Días cobertura con capacitación` ~", var)), data = datos_modelo)
+                  +         resumen <- summary(modelo)
+                  +         ss_between <- resumen[[1]]$`Sum Sq`[1]
+                  +         ss_total <- sum(resumen[[1]]$`Sum Sq`)
+                  +         eta_sq <- ss_between / ss_total
+                  +       } else {
+                    +         eta_sq <- 0
+                    +       }
+                +       data.frame(variable = var, eta_squared = eta_sq)
+                +     }) %>%
+                +       arrange(desc(eta_squared))
+              +     
+                +     # Seleccionar top 5 variables
+                +     top_vars <- head(eta_squared_vars$variable, 5)
+                +     cat("  Variables más importantes para el modelo:", paste(top_vars, collapse = ", "), "\n")
+                +     
+                  +     # Crear fórmula para el modelo
+                  +     formula_modelo <- as.formula(paste("`Días cobertura con capacitación` ~", 
+                                                           +                                        paste(top_vars, collapse = " + ")))
+                  +     
+                    +     # Modelo lineal
+                    +     modelo_lm <- lm(formula_modelo, data = datos_modelo)
+                    +     
+                      +     # Predicciones y residuos
+                      +     datos_modelo$prediccion <- predict(modelo_lm, newdata = datos_modelo)
+                      +     datos_modelo$residuo <- datos_modelo$`Días cobertura con capacitación` - datos_modelo$prediccion
+                      +     
+                        +     # Segmentar por percentiles de residuos
+                        +     datos_modelo$segmento_residuo <- cut(datos_modelo$residuo,
+                                                                   +                                          breaks = quantile(datos_modelo$residuo, 
+                                                                                                                                +                                                            probs = seq(0, 1, 0.2), 
+                                                                                                                                +                                                            na.rm = TRUE),
+                                                                   +                                          labels = c("Muy bajo", "Bajo", "Medio", "Alto", "Muy alto"),
+                                                                   +                                          include.lowest = TRUE)
+                        +     
+                          +     # Análisis de segmentos por residuos
+                          +     analisis_residuos <- datos_modelo %>%
+                            +       group_by(segmento_residuo) %>%
+                            +       summarise(
+                              +         n = n(),
+                              +         media_residuo = mean(residuo, na.rm = TRUE),
+                              +         media_real = mean(`Días cobertura con capacitación`, na.rm = TRUE),
+                              +         media_pred = mean(prediccion, na.rm = TRUE),
+                              +         mediana_real = median(`Días cobertura con capacitación`, na.rm = TRUE),
+                              +         sd_real = sd(`Días cobertura con capacitación`, na.rm = TRUE),
+                              +         goal_ajustado = round(media_pred + media_residuo),
+                              +         .groups = 'drop'
+                              +       ) %>%
+                            +       arrange(media_residuo)
+                          +     
+                            +     # Métricas del modelo
+                            +     r2_modelo <- summary(modelo_lm)$r.squared
+                            +     rmse <- sqrt(mean((datos_modelo$residuo)^2, na.rm = TRUE))
+                            +     
+                              +     cat("  R² del modelo:", round(r2_modelo, 3), "\n")
+                            +     cat("  RMSE:", round(rmse, 2), "días\n")
+                            +     
+                              +     # Gráfico de residuos vs predicciones
+                              +     p_residuos <- ggplot(datos_modelo, aes(x = prediccion, y = residuo, color = segmento_residuo)) +
+                                +       geom_point(alpha = 0.6) +
+                                +       geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+                                +       labs(title = paste("Análisis de Residuos -", grupo_nombre),
+                                             +            subtitle = paste("R² =", round(r2_modelo, 3), "| RMSE =", round(rmse, 2), "días"),
+                                             +            x = "Días Predichos",
+                                             +            y = "Residuo (Real - Predicho)",
+                                             +            color = "Segmento por Residuo") +
+                                +       theme_minimal()
+                              +     
+                                +     ggsave(file.path(grupo_dir, "modelo_residuos.png"), p_residuos, width = 10, height = 6, dpi = 300)
+                              +     
+                                +     # Gráfico de segmentos de residuos
+                                +     p_segmentos_residuos <- ggplot(analisis_residuos, aes(x = segmento_residuo, y = media_real)) +
+                                  +       geom_col(fill = "steelblue", alpha = 0.8) +
+                                  +       geom_errorbar(aes(ymin = media_real - sd_real/sqrt(n), 
+                                                            +                         ymax = media_real + sd_real/sqrt(n)), 
+                                                        +                     width = 0.2, color = "darkred") +
+                                  +       geom_text(aes(label = paste("n =", n)), vjust = -0.5, size = 3) +
+                                  +       geom_text(aes(label = paste("Goal:", goal_ajustado)), vjust = 1.5, size = 3, color = "white") +
+                                  +       labs(title = paste("Segmentos por Residuos del Modelo -", grupo_nombre),
+                                               +            x = "Segmento por Residuo",
+                                               +            y = "Días de Cobertura (media)") +
+                                  +       theme_minimal()
+                                +     
+                                  +     ggsave(file.path(grupo_dir, "segmentos_residuos.png"), p_segmentos_residuos, width = 10, height = 6, dpi = 300)
+                                +     
+                                  +     # Guardar análisis
+                                  +     write_xlsx(analisis_residuos, file.path(grupo_dir, "segmentos_modelo.xlsx"))
+                                +     
+                                  +     return(list(
+                                    +       analisis = analisis_residuos,
+                                    +       modelo = modelo_lm,
+                                    +       r2 = r2_modelo,
+                                    +       rmse = rmse
+                                    +     ))
+                                +     
+                                  +   }, error = function(e) {
+                                    +     cat("  Error en modelo de regresión:", e$message, "\n")
+                                    +     return(NULL)
+                                    +   })
+    + }
+> 
+  > # ======================================================================
+> # MÉTODO 3: SEGMENTACIÓN POR PERCENTILES DENTRO DE CATEGORÍAS
+  > # ======================================================================
+> 
+  > crear_segmentos_percentiles <- function(datos_grupo, grupo_nombre, grupo_dir, mejor_agrupador) {
+    +   cat("\nMÉTODO 3: CREANDO SEGMENTOS POR PERCENTILES...\n")
+    +   
+      +   tryCatch({
+        +     # Determinar el mejor agrupador (si no se proporciona, usar DescripcionCC)
+          +     if (missing(mejor_agrupador) || is.null(mejor_agrupador)) {
+            +       mejor_agrupador <- "DescripcionCC"
+            +     }
+        +     
+          +     # Crear segmentos por percentiles dentro de cada categoría
+          +     datos_percentiles <- datos_grupo %>%
+            +       group_by_at(mejor_agrupador) %>%
+            +       mutate(
+              +         percentil_dentro = ntile(`Días cobertura con capacitación`, 4),  # 4 cuartiles
+              +         segmento_percentil = case_when(
+                +           percentil_dentro == 1 ~ "Q1 (25% inferior)",
+                +           percentil_dentro == 2 ~ "Q2 (25-50%)",
+                +           percentil_dentro == 3 ~ "Q3 (50-75%)",
+                +           percentil_dentro == 4 ~ "Q4 (75% superior)"
+                +         )
+              +       ) %>%
+            +       ungroup()
+          +     
+            +     # Análisis de segmentos por percentiles
+            +     analisis_percentiles <- datos_percentiles %>%
+              +       group_by(!!sym(mejor_agrupador), segmento_percentil) %>%
+              +       summarise(
+                +         n = n(),
+                +         media_dias = mean(`Días cobertura con capacitación`, na.rm = TRUE),
+                +         mediana_dias = median(`Días cobertura con capacitación`, na.rm = TRUE),
+                +         sd_dias = sd(`Días cobertura con capacitación`, na.rm = TRUE),
+                +         q1 = quantile(`Días cobertura con capacitación`, 0.25, na.rm = TRUE),
+                +         q3 = quantile(`Días cobertura con capacitación`, 0.75, na.rm = TRUE),
+                +         goal_mediana = round(mediana_dias),
+                +         goal_ambicioso = round(quantile(`Días cobertura con capacitación`, 0.25, na.rm = TRUE)),  # Percentil 25 como meta
+                +         .groups = 'drop'
+                +       )
+            +     
+              +     # Análisis agregado por percentil (sin considerar categoría)
+              +     analisis_percentiles_agregado <- datos_percentiles %>%
+                +       group_by(segmento_percentil) %>%
+                +       summarise(
+                  +         n = n(),
+                  +         media_dias = mean(`Días cobertura con capacitación`, na.rm = TRUE),
+                  +         mediana_dias = median(`Días cobertura con capacitación`, na.rm = TRUE),
+                  +         sd_dias = sd(`Días cobertura con capacitación`, na.rm = TRUE),
+                  +         min_dias = min(`Días cobertura con capacitación`, na.rm = TRUE),
+                  +         max_dias = max(`Días cobertura con capacitación`, na.rm = TRUE),
+                  +         goal_recomendado = round(quantile(`Días cobertura con capacitación`, 0.4, na.rm = TRUE)),  # Percentil 40 como meta alcanzable
+                  +         .groups = 'drop'
+                  +       )
+              +     
+                +     # Gráfico de distribución por percentiles
+                +     p_percentiles <- ggplot(datos_percentiles, aes(x = segmento_percentil, y = `Días cobertura con capacitación`)) +
+                  +       geom_boxplot(fill = "lightblue", alpha = 0.7) +
+                  +       stat_summary(fun = median, geom = "point", shape = 18, size = 4, color = "darkred") +
+                  +       labs(title = paste("Distribución por Percentiles -", grupo_nombre),
+                               +            subtitle = paste("Agrupador:", mejor_agrupador),
+                               +            x = "Segmento por Percentil",
+                               +            y = "Días de Cobertura") +
+                  +       theme_minimal()
+                +     
+                  +     ggsave(file.path(grupo_dir, "segmentos_percentiles.png"), p_percentiles, width = 10, height = 6, dpi = 300)
+                +     
+                  +     # Gráfico de metas por percentil
+                  +     p_metas_percentiles <- ggplot(analisis_percentiles_agregado, aes(x = reorder(segmento_percentil, -goal_recomendado), y = goal_recomendado)) +
+                    +       geom_col(fill = "steelblue", alpha = 0.8) +
+                    +       geom_text(aes(label = paste("Meta:", goal_recomendado, "días")), 
+                                      +                 vjust = 1.5, size = 4, color = "white") +
+                    +       geom_text(aes(label = paste("n =", n)), vjust = -0.5, size = 3.5) +
+                    +       labs(title = paste("Metas Recomendadas por Percentil -", grupo_nombre),
+                                 +            subtitle = "Meta basada en percentil 40 de cada segmento",
+                                 +            x = "Segmento por Percentil",
+                                 +            y = "Meta Recomendada (días)") +
+                    +       theme_minimal()
+                  +     
+                    +     ggsave(file.path(grupo_dir, "metas_percentiles.png"), p_metas_percentiles, width = 10, height = 6, dpi = 300)
+                  +     
+                    +     # Guardar análisis
+                    +     write_xlsx(list(
+                      +       por_categoria = analisis_percentiles,
+                      +       agregado = analisis_percentiles_agregado
+                      +     ), file.path(grupo_dir, "segmentos_percentiles.xlsx"))
+                  +     
+                    +     cat("  Segmentación creada con 4 percentiles por categoría\n")
+                  +     cat("  Total segmentos:", nrow(analisis_percentiles), "\n")
+                  +     
+                    +     return(list(
+                      +       analisis_categoria = analisis_percentiles,
+                      +       analisis_agregado = analisis_percentiles_agregado
+                      +     ))
+                  +     
+                    +   }, error = function(e) {
+                      +     cat("  Error en segmentación por percentiles:", e$message, "\n")
+                      +     return(NULL)
+                      +   })
+    + }
+> 
+  > # ======================================================================
+> # FUNCIÓN PARA EVALUAR AGRUPADORES (SIMPLIFICADA)
+  > # ======================================================================
+> 
+  > evaluar_agrupador_simple <- function(columna, datos_subset) {
+    +   
+      +   datos_temp <- datos_subset
+      +   
+        +   analisis <- datos_temp %>%
+          +     group_by_at(columna) %>%
+          +     summarise(
+            +       n = n(),
+            +       media = mean(`Días cobertura con capacitación`, na.rm = TRUE),
+            +       mediana = median(`Días cobertura con capacitación`, na.rm = TRUE),
+            +       sd = sd(`Días cobertura con capacitación`, na.rm = TRUE),
+            +       cv = ifelse(media > 0, sd/media, NA),
+            +       .groups = 'drop'
+            +     ) %>%
+          +     filter(n >= 5) %>%
+          +     filter(!is.na(cv))
+        +   
+          +   if (nrow(analisis) < 2) {
+            +     return(data.frame(
+              +       agrupador = columna,
+              +       grupos_n = nrow(analisis),
+              +       eta_squared = NA,
+              +       cv_promedio = NA,
+              +       rango_medias = NA
+              +     ))
+            +   }
+        +   
+          +   categorias_validas <- analisis[[columna]]
+          +   datos_anova <- datos_temp %>%
+            +     filter(!!sym(columna) %in% categorias_validas)
+          +   
+            +   if (length(unique(datos_anova[[columna]])) > 1) {
+              +     formula_text <- paste0("`Días cobertura con capacitación` ~ `", columna, "`")
+              +     modelo <- aov(as.formula(formula_text), data = datos_anova)
+              +     resumen <- summary(modelo)
+              +     
+                +     ss_total <- sum((datos_anova$`Días cobertura con capacitación` - 
+                                         +                        mean(datos_anova$`Días cobertura con capacitación`, na.rm = TRUE))^2, na.rm = TRUE)
+                +     ss_between <- sum(analisis$n * (analisis$media - 
+                                                        +                                       mean(datos_anova$`Días cobertura con capacitación`, na.rm = TRUE))^2)
+                +     eta_sq <- ifelse(ss_total > 0, ss_between / ss_total, 0)
+                +   } else {
+                  +     eta_sq <- NA
+                  +   }
+          +   
+            +   return(data.frame(
+              +     agrupador = columna,
+              +     grupos_n = nrow(analisis),
+              +     eta_squared = eta_sq,
+              +     cv_promedio = mean(analisis$cv, na.rm = TRUE),
+              +     rango_medias = max(analisis$media, na.rm = TRUE) - min(analisis$media, na.rm = TRUE)
+              +   ))
+          + }
+> 
+  > # ======================================================================
+> # FUNCIÓN PRINCIPAL PARA ANALIZAR CADA GRUPO
+  > # ======================================================================
+> 
+  > analizar_grupo <- function(grupo_nombre, datos_completos) {
+    +   cat("\n", strrep("=", 50), "\n")
+    +   cat("ANALIZANDO GRUPO:", grupo_nombre, "\n")
+    +   cat(strrep("=", 50), "\n")
+    +   
+      +   # Filtrar datos para el grupo actual
+      +   datos_grupo <- datos_completos %>%
+        +     filter(Grupo == grupo_nombre)
+      +   
+        +   if (nrow(datos_grupo) < 10) {
+          +     cat("Grupo", grupo_nombre, "tiene menos de 10 observaciones. Análisis omitido.\n")
+          +     return(NULL)
+          +   }
+      +   
+        +   # Crear directorio específico para el grupo
+        +   grupo_dir <- file.path(output_dir, grupo_nombre)
+        +   if (!dir.exists(grupo_dir)) {
+          +     dir.create(grupo_dir, recursive = TRUE)
+          +   }
+        +   
+          +   # 1. EVALUAR AGRUPADORES CATEGÓRICOS (TRADICIONAL)
+          +   cat("\n1. EVALUANDO AGRUPADORES CATEGÓRICOS...\n")
+        +   
+          +   agrupadores <- setdiff(columnas_interes, c("Días cobertura con capacitación", "Grupo"))
+          +   resultados <- purrr::map_dfr(agrupadores, function(agrupador) {
+            +     evaluar_agrupador_simple(agrupador, datos_grupo)
+            +   })
+          +   
+            +   resultados <- resultados %>%
+              +     filter(!is.na(eta_squared)) %>%
+              +     mutate(
+                +       score = eta_squared * (1 - cv_promedio) * (1 - (grupos_n / nrow(datos_grupo)))
+                +     ) %>%
+              +     arrange(desc(score))
+            +   
+              +   mejor_agrupador <- ifelse(nrow(resultados) > 0, resultados$agrupador[1], "DescripcionCC")
+              +   cat("  Mejor agrupador categórico:", mejor_agrupador, "\n")
+              +   cat("  Eta-squared:", round(resultados$eta_squared[1], 4), "\n")
+              +   
+                +   # Guardar resultados tradicionales
+                +   write_xlsx(resultados, file.path(grupo_dir, "evaluacion_agrupadores_tradicional.xlsx"))
+              +   
+                +   # 2. APLICAR LOS 3 MÉTODOS ALTERNATIVOS
+                +   
+                +   # Método 1: Árbol de decisión
+                +   resultado_arbol <- crear_segmentos_arbol(datos_grupo, grupo_nombre, grupo_dir)
+                +   
+                  +   # Método 2: Modelo de regresión
+                  +   resultado_modelo <- crear_segmentos_regresion(datos_grupo, grupo_nombre, grupo_dir)
+                  +   
+                    +   # Método 3: Percentiles
+                    +   resultado_percentiles <- crear_segmentos_percentiles(datos_grupo, grupo_nombre, grupo_dir, mejor_agrupador)
+                    +   
+                      +   # 3. COMPARAR Y RECOMENDAR EL MEJOR MÉTODO
+                      +   
+                      +   cat("\n4. COMPARANDO MÉTODOS Y GENERANDO RECOMENDACIONES...\n")
+                    +   
+                      +   # Recolectar métricas de cada método
+                      +   metricas_metodos <- data.frame(
+                        +     Metodo = character(),
+                        +     Num_Segmentos = numeric(),
+                        +     R2_o_Eta = numeric(),
+                        +     CV_Promedio = numeric(),
+                        +     stringsAsFactors = FALSE
+                        +   )
+                      +   
+                        +   # Método tradicional (agrupador categórico)
+                        +   if (nrow(resultados) > 0) {
+                          +     metricas_metodos <- rbind(metricas_metodos, data.frame(
+                            +       Metodo = paste("Agrupador:", mejor_agrupador),
+                            +       Num_Segmentos = resultados$grupos_n[1],
+                            +       R2_o_Eta = resultados$eta_squared[1],
+                            +       CV_Promedio = resultados$cv_promedio[1]
+                            +     ))
+                          +   }
+                      +   
+                        +   # Método árbol
+                        +   if (!is.null(resultado_arbol)) {
+                          +     # Calcular CV promedio para segmentos del árbol
+                            +     cv_arbol <- if (nrow(resultado_arbol$analisis) > 0) {
+                              +       mean(resultado_arbol$analisis$sd_dias / resultado_arbol$analisis$media_dias, na.rm = TRUE)
+                              +     } else { NA }
+                            +     
+                              +     metricas_metodos <- rbind(metricas_metodos, data.frame(
+                                +       Metodo = "Árbol de Decisión",
+                                +       Num_Segmentos = nrow(resultado_arbol$analisis),
+                                +       R2_o_Eta = resultado_arbol$r2,
+                                +       CV_Promedio = cv_arbol
+                                +     ))
+                              +   }
+                      +   
+                        +   # Método modelo
+                        +   if (!is.null(resultado_modelo)) {
+                          +     # Calcular CV promedio para segmentos del modelo
+                            +     cv_modelo <- if (nrow(resultado_modelo$analisis) > 0) {
+                              +       mean(resultado_modelo$analisis$sd_real / resultado_modelo$analisis$media_real, na.rm = TRUE)
+                              +     } else { NA }
+                            +     
+                              +     metricas_metodos <- rbind(metricas_metodos, data.frame(
+                                +       Metodo = "Modelo de Regresión",
+                                +       Num_Segmentos = nrow(resultado_modelo$analisis),
+                                +       R2_o_Eta = resultado_modelo$r2,
+                                +       CV_Promedio = cv_modelo
+                                +     ))
+                              +   }
+                      +   
+                        +   # Método percentiles
+                        +   if (!is.null(resultado_percentiles)) {
+                          +     cv_percentiles <- mean(resultado_percentiles$analisis_agregado$sd_dias / 
+                                                         +                              resultado_percentiles$analisis_agregado$media_dias, na.rm = TRUE)
+                          +     
+                            +     metricas_metodos <- rbind(metricas_metodos, data.frame(
+                              +       Metodo = "Segmentación por Percentiles",
+                              +       Num_Segmentos = nrow(resultado_percentiles$analisis_agregado),
+                              +       R2_o_Eta = NA,  # No aplica
+                              +       CV_Promedio = cv_percentiles
+                              +     ))
+                            +   }
+                      +   
+                        +   # Calcular score para cada método
+                        +   metricas_metodos <- metricas_metodos %>%
+                          +     mutate(
+                            +       Score = ifelse(is.na(R2_o_Eta), 0.5, R2_o_Eta) * (1 - CV_Promedio) * 
+                              +         (1 - (Num_Segmentos / nrow(datos_grupo)))
+                            +     ) %>%
+                          +     arrange(desc(Score))
+                        +   
+                          +   # Guardar comparación
+                          +   write_xlsx(metricas_metodos, file.path(grupo_dir, "comparacion_metodos.xlsx"))
+                        +   
+                          +   # Gráfico de comparación
+                          +   p_comparacion <- ggplot(metricas_metodos, aes(x = reorder(Metodo, Score), y = Score, fill = Metodo)) +
+                            +     geom_col() +
+                            +     geom_text(aes(label = paste("Score:", round(Score, 3))), hjust = -0.1, size = 3) +
+                            +     coord_flip() +
+                            +     labs(title = paste("Comparación de Métodos de Segmentación -", grupo_nombre),
+                                       +          x = "Método",
+                                       +          y = "Score (mayor es mejor)") +
+                            +     theme_minimal() +
+                            +     theme(legend.position = "none")
+                          +   
+                            +   ggsave(file.path(grupo_dir, "comparacion_metodos.png"), p_comparacion, width = 10, height = 6, dpi = 300)
+                          +   
+                            +   # 4. GENERAR RESUMEN EJECUTIVO CON RECOMENDACIÓN
+                            +   
+                            +   metodo_recomendado <- metricas_metodos$Metodo[1]
+                            +   cat("\nRECOMENDACIÓN FINAL:\n")
+                            +   cat("  Método recomendado:", metodo_recomendado, "\n")
+                            +   cat("  Score del método:", round(metricas_metodos$Score[1], 3), "\n")
+                            +   
+                              +   # Determinar goals finales basados en el método recomendado
+                              +   if (grepl("Agrupador:", metodo_recomendado)) {
+                                +     # Usar agrupador categórico tradicional
+                                  +     goals_finales <- datos_grupo %>%
+                                    +       group_by_at(mejor_agrupador) %>%
+                                    +       summarise(
+                                      +         n = n(),
+                                      +         mediana_dias = median(`Días cobertura con capacitación`, na.rm = TRUE),
+                                      +         goal_recomendado = round(quantile(`Días cobertura con capacitación`, 0.4, na.rm = TRUE)),  # Percentil 40
+                                      +         .groups = 'drop'
+                                      +       ) %>%
+                                    +       filter(n >= 5)
+                                  +     
+                                    +   } else if (metodo_recomendado == "Árbol de Decisión" && !is.null(resultado_arbol)) {
+                                      +     # Usar segmentos del árbol
+                                        +     goals_finales <- resultado_arbol$analisis %>%
+                                          +       select(segmento = segmento_arbol, n, mediana_dias = mediana_dias, goal_recomendado = goal_mediana)
+                                        +     
+                                          +   } else if (metodo_recomendado == "Modelo de Regresión" && !is.null(resultado_modelo)) {
+                                            +     # Usar segmentos del modelo
+                                              +     goals_finales <- resultado_modelo$analisis %>%
+                                                +       select(segmento = segmento_residuo, n, mediana_dias = media_real, goal_recomendado = goal_ajustado)
+                                              +     
+                                                +   } else {
+                                                  +     # Usar percentiles por defecto
+                                                    +     goals_finales <- resultado_percentiles$analisis_agregado %>%
+                                                      +       select(segmento = segmento_percentil, n, mediana_dias, goal_recomendado)
+                                                    +   }
+                            +   
+                              +   # Guardar goals finales
+                              +   write_xlsx(goals_finales, file.path(grupo_dir, "goals_recomendados_finales.xlsx"))
+                            +   
+                              +   # Gráfico de goals finales
+                              +   if (nrow(goals_finales) > 0) {
+                                +     p_goals_finales <- ggplot(goals_finales, aes(x = reorder(segmento, goal_recomendado), y = goal_recomendado)) +
+                                  +       geom_col(fill = "darkgreen", alpha = 0.8) +
+                                  +       geom_text(aes(label = paste("Goal:", goal_recomendado, "días")), 
+                                                    +                 vjust = 1.5, size = 3.5, color = "white") +
+                                  +       geom_text(aes(label = paste("n =", n)), vjust = -0.5, size = 3) +
+                                  +       coord_flip() +
+                                  +       labs(title = paste("Goals Recomendados -", grupo_nombre),
+                                               +            subtitle = paste("Método:", metodo_recomendado),
+                                               +            x = "Segmento",
+                                               +            y = "Meta Recomendada (días)") +
+                                  +       theme_minimal()
+                                +     
+                                  +     ggsave(file.path(grupo_dir, "goals_finales.png"), p_goals_finales, width = 10, height = 6, dpi = 300)
+                                +   }
+                            +   
+                              +   # RESUMEN EJECUTIVO
+                              +   resumen_ejecutivo <- data.frame(
+                                +     Grupo = grupo_nombre,
+                                +     Metodo_Recomendado = metodo_recomendado,
+                                +     Score_Metodo = round(metricas_metodos$Score[1], 3),
+                                +     Total_Registros = nrow(datos_grupo),
+                                +     Segmentos_Identificados = nrow(goals_finales),
+                                +     Mediana_Global = median(datos_grupo$`Días cobertura con capacitación`, na.rm = TRUE),
+                                +     Rango_Goals = ifelse(nrow(goals_finales) > 0, 
+                                                           +                          paste(min(goals_finales$goal_recomendado), "-", 
+                                                                                            +                                max(goals_finales$goal_recomendado), "días"),
+                                                           +                          "No disponible"),
+                                +     Fecha_Analisis = as.character(Sys.Date())
+                                +   )
+                              +   
+                                +   write_xlsx(resumen_ejecutivo, file.path(grupo_dir, "resumen_ejecutivo.xlsx"))
+                              +   
+                                +   cat("\nRESUMEN GRUPO", grupo_nombre, ":\n")
+                              +   cat("  - Método recomendado:", metodo_recomendado, "\n")
+                              +   cat("  - Segmentos identificados:", nrow(goals_finales), "\n")
+                              +   cat("  - Mediana global:", round(median(datos_grupo$`Días cobertura con capacitación`, na.rm = TRUE)), "días\n")
+                              +   cat("  - Rango de goals:", ifelse(nrow(goals_finales) > 0, 
+                                                                    +                                     paste(min(goals_finales$goal_recomendado), "-", 
+                                                                                                                +                                           max(goals_finales$goal_recomendado), "días"),
+                                                                    +                                     "No disponible"), "\n")
+                              +   
+                                +   return(list(
+                                  +     resumen = resumen_ejecutivo,
+                                  +     metodo_recomendado = metodo_recomendado,
+                                  +     goals_finales = goals_finales,
+                                  +     metricas_metodos = metricas_metodos
+                                  +   ))
+                              + }
+> 
+  > # ======================================================================
+> # EJECUTAR ANÁLISIS PARA CADA GRUPO
+  > # ======================================================================
+> 
+  > cat("\n", strrep("*", 60))
+
+************************************************************> cat("\nINICIANDO ANÁLISIS POR GRUPO DE GESTIÓN")
+
+INICIANDO ANÁLISIS POR GRUPO DE GESTIÓN> cat("\n", strrep("*", 60), "\n")
+
+************************************************************ 
+  > 
+  > grupos_existentes <- intersect(grupos, unique(datos_limpieza$Grupo))
+> grupos_no_existentes <- setdiff(grupos, grupos_existentes)
+> 
+  > if (length(grupos_no_existentes) > 0) {
+    +   cat("\nADVERTENCIA: Los siguientes grupos no se encontraron en los datos:\n")
+    +   cat(paste(grupos_no_existentes, collapse = ", "), "\n")
+    + }
+> 
+  > if (length(grupos_existentes) == 0) {
+    +   stop("Error: No se encontró ninguno de los grupos especificados en los datos.")
+    + }
+> 
+  > resultados_grupos <- list()
+> resultados_detalle <- list()
+> 
+  > for (grupo in grupos_existentes) {
+    +   resultado <- analizar_grupo(grupo, datos_limpieza)
+    +   if (!is.null(resultado)) {
+      +     resultados_grupos[[grupo]] <- resultado$resumen
+      +     resultados_detalle[[grupo]] <- resultado
+      +   }
+    + }
+
+================================================== 
+  ANALIZANDO GRUPO: SUCURSAL 
+================================================== 
+  
+  1. EVALUANDO AGRUPADORES CATEGÓRICOS...
+Mejor agrupador categórico: DescripcionCC 
+Eta-squared: 0.1665 
+
+MÉTODO 1: CREANDO SEGMENTOS CON ÁRBOL DE DECISIÓN...
+Excluyendo variables con >20 categorías: DescripcionCC, Plaza, Estado, Nombre Reclutador 
+Árbol de decisión creado con 3 segmentos
+R² del árbol: 0.074 
+
+MÉTODO 2: CREANDO SEGMENTOS CON MODELO DE REGRESIÓN...
+Error en modelo de regresión: In index: 2. 
+
+MÉTODO 3: CREANDO SEGMENTOS POR PERCENTILES...
+Segmentación creada con 4 percentiles por categoría
+Total segmentos: 394 
+
+4. COMPARANDO MÉTODOS Y GENERANDO RECOMENDACIONES...
+
+RECOMENDACIÓN FINAL:
+  Método recomendado: Segmentación por Percentiles 
+Score del método: 0.259 
+
+RESUMEN GRUPO SUCURSAL :
+  - Método recomendado: Segmentación por Percentiles 
+- Segmentos identificados: 4 
+- Mediana global: 25 días
+- Rango de goals: 15 - 42 días 
+
+================================================== 
+  ANALIZANDO GRUPO: COBRANZA 
+================================================== 
+  
+  1. EVALUANDO AGRUPADORES CATEGÓRICOS...
+Mejor agrupador categórico: Nombre Reclutador 
+Eta-squared: 0.2785 
+
+MÉTODO 1: CREANDO SEGMENTOS CON ÁRBOL DE DECISIÓN...
+Excluyendo variables con >20 categorías: DescripcionCC, Plaza, Estado, Nombre Reclutador 
+Árbol de decisión creado con 5 segmentos
+R² del árbol: 0.103 
+
+MÉTODO 2: CREANDO SEGMENTOS CON MODELO DE REGRESIÓN...
+Error en modelo de regresión: In index: 2. 
+
+MÉTODO 3: CREANDO SEGMENTOS POR PERCENTILES...
+Segmentación creada con 4 percentiles por categoría
+Total segmentos: 201 
+
+4. COMPARANDO MÉTODOS Y GENERANDO RECOMENDACIONES...
+
+RECOMENDACIÓN FINAL:
+  Método recomendado: Segmentación por Percentiles 
+Score del método: 0.195 
+
+RESUMEN GRUPO COBRANZA :
+  - Método recomendado: Segmentación por Percentiles 
+- Segmentos identificados: 4 
+- Mediana global: 41 días
+- Rango de goals: 20 - 66 días 
+
+================================================== 
+  ANALIZANDO GRUPO: PLAZA 
+================================================== 
+  
+  1. EVALUANDO AGRUPADORES CATEGÓRICOS...
+Mejor agrupador categórico: Nombre Reclutador 
+Eta-squared: 0.2427 
+
+MÉTODO 1: CREANDO SEGMENTOS CON ÁRBOL DE DECISIÓN...
+Excluyendo variables con >20 categorías: DescripcionCC, Plaza, Estado, Nombre Reclutador 
+Árbol de decisión creado con 7 segmentos
+R² del árbol: 0.126 
+
+MÉTODO 2: CREANDO SEGMENTOS CON MODELO DE REGRESIÓN...
+Error en modelo de regresión: In index: 2. 
+
+MÉTODO 3: CREANDO SEGMENTOS POR PERCENTILES...
+Segmentación creada con 4 percentiles por categoría
+Total segmentos: 185 
+
+4. COMPARANDO MÉTODOS Y GENERANDO RECOMENDACIONES...
+
+RECOMENDACIÓN FINAL:
+  Método recomendado: Segmentación por Percentiles 
+Score del método: 0.149 
+
+RESUMEN GRUPO PLAZA :
+  - Método recomendado: Segmentación por Percentiles 
+- Segmentos identificados: 4 
+- Mediana global: 25 días
+- Rango de goals: 10 - 53 días 
+
+================================================== 
+  ANALIZANDO GRUPO: ODG 
+================================================== 
+  
+  1. EVALUANDO AGRUPADORES CATEGÓRICOS...
+Mejor agrupador categórico: Familia de Puesto 
+Eta-squared: 0.1719 
+
+MÉTODO 1: CREANDO SEGMENTOS CON ÁRBOL DE DECISIÓN...
+Excluyendo variables con >20 categorías: DescripcionCC, Familia de Puesto, Nombre Reclutador 
+Árbol de decisión creado con 5 segmentos
+R² del árbol: 0.203 
+
+MÉTODO 2: CREANDO SEGMENTOS CON MODELO DE REGRESIÓN...
+Error en modelo de regresión: In index: 2. 
+
+MÉTODO 3: CREANDO SEGMENTOS POR PERCENTILES...
+Segmentación creada con 4 percentiles por categoría
+Total segmentos: 72 
+
+4. COMPARANDO MÉTODOS Y GENERANDO RECOMENDACIONES...
+
+RECOMENDACIÓN FINAL:
+  Método recomendado: Segmentación por Percentiles 
+Score del método: 0.053 
+
+RESUMEN GRUPO ODG :
+  - Método recomendado: Segmentación por Percentiles 
+- Segmentos identificados: 4 
+- Mediana global: 39 días
+- Rango de goals: 10 - 85 días 
+> 
+  > # ======================================================================
+> # RESUMEN CONSOLIDADO
+  > # ======================================================================
+> 
+  > cat("\n", strrep("*", 60))
+
+************************************************************> cat("\nRESUMEN CONSOLIDADO DE TODOS LOS GRUPOS")
+
+RESUMEN CONSOLIDADO DE TODOS LOS GRUPOS> cat("\n", strrep("*", 60), "\n")
+
+************************************************************ 
+  > 
+  > if (length(resultados_grupos) > 0) {
+    +   resumen_consolidado <- bind_rows(resultados_grupos)
+    +   write_xlsx(resumen_consolidado, file.path(output_dir, "resumen_consolidado_grupos.xlsx"))
+    +   
+      +   # Gráfico comparativo de métodos recomendados
+      +   p_metodos_recomendados <- ggplot(resumen_consolidado, aes(x = reorder(Grupo, -Score_Metodo), y = Score_Metodo, fill = Metodo_Recomendado)) +
+        +     geom_col() +
+        +     geom_text(aes(label = Metodo_Recomendado), angle = 45, hjust = 1, size = 3) +
+        +     labs(title = "Métodos Recomendados por Grupo",
+                   +          subtitle = "Score del método recomendado",
+                   +          x = "Grupo",
+                   +          y = "Score del Método") +
+        +     theme_minimal() +
+        +     theme(axis.text.x = element_text(angle = 45, hjust = 1))
+      +   
+        +   ggsave(file.path(output_dir, "metodos_recomendados.png"), p_metodos_recomendados, width = 10, height = 7, dpi = 300)
+      +   
+        +   cat("\nRESUMEN CONSOLIDADO:\n")
+      +   print(resumen_consolidado)
+      +   
+        +   # Crear archivo README
+        +   readme_content <- paste0(
+          +     "RESULTADOS DEL ANÁLISIS DE GOALS DE DÍAS DE COBERTURA\n",
+          +     "Fecha: ", Sys.Date(), "\n",
+          +     "\nMÉTODOS IMPLEMENTADOS:\n",
+          +     "1. ÁRBOLES DE DECISIÓN: Segmentación supervisada basada en la variable objetivo\n",
+          +     "2. MODELOS DE REGRESIÓN: Predicción + segmentación por residuos\n",
+          +     "3. SEGMENTACIÓN POR PERCENTILES: División en cuartiles dentro de categorías\n",
+          +     "\nINTERPRETACIÓN DE ARCHIVOS EN CADA CARPETA:\n",
+          +     "- arbol_decision_segmentos.png: Visualización del árbol de decisión\n",
+          +     "- segmentos_arbol.xlsx: Segmentos identificados por el árbol\n",
+          +     "- modelo_residuos.png: Análisis de residuos del modelo\n",
+          +     "- segmentos_percentiles.xlsx: Segmentación por percentiles\n",
+          +     "- comparacion_metodos.xlsx: Comparación de todos los métodos\n",
+          +     "- goals_recomendados_finales.xlsx: Goals finales recomendados\n",
+          +     "- resumen_ejecutivo.xlsx: Resumen estadístico\n"
+          +   )
+        +   
+          +   writeLines(readme_content, file.path(output_dir, "README.txt"))
+        +   
+          +   cat("\n", strrep("=", 60))
+        +   cat("\nANÁLISIS COMPLETADO EXITOSAMENTE")
+        +   cat("\n", strrep("=", 60))
+        +   cat("\n\nRECOMENDACIONES FINALES:\n")
+        +   cat("1. El clustering k-means no funcionó bien (silueta baja)\n")
+        +   cat("2. Los métodos supervisados (árboles, modelos) son más apropiados\n")
+        +   cat("3. Revisa los gráficos de árboles de decisión para entender las reglas de segmentación\n")
+        +   cat("4. Los percentiles dan metas más realistas y alcanzables\n")
+        +   
+          + } else {
+            +   cat("\nNo se pudo realizar análisis para ningún grupo.\n")
+            + }
+
+RESUMEN CONSOLIDADO:
+  Grupo           Metodo_Recomendado Score_Metodo Total_Registros Segmentos_Identificados Mediana_Global  Rango_Goals Fecha_Analisis
+1 SUCURSAL Segmentación por Percentiles        0.259             948                       4             25 15 - 42 días     2026-01-30
+2 COBRANZA Segmentación por Percentiles        0.195             670                       4             41 20 - 66 días     2026-01-30
+3    PLAZA Segmentación por Percentiles        0.149             446                       4             25 10 - 53 días     2026-01-30
+4      ODG Segmentación por Percentiles        0.053             339                       4             39 10 - 85 días     2026-01-30
+
+============================================================
+  ANÁLISIS COMPLETADO EXITOSAMENTE
+============================================================
+  
+  RECOMENDACIONES FINALES:
+  1. El clustering k-means no funcionó bien (silueta baja)
+2. Los métodos supervisados (árboles, modelos) son más apropiados
+3. Revisa los gráficos de árboles de decisión para entender las reglas de segmentación
+4. Los percentiles dan metas más realistas y alcanzables
+> 
+  > 
+  > 
+  > 
+  > 
+  > # ======================================================================
+> # FUNCIÓN PARA CREAR ARCHIVO GENERAL DE PERCENTILES
+  > # ======================================================================
+> 
+  > crear_tabla_percentiles_grupos <- function(datos_completos, grupos_analizar, output_dir) {
+    +   cat("\n", strrep("=", 60))
+    +   cat("\nCREANDO TABLA GENERAL DE PERCENTILES POR GRUPO")
+    +   cat("\n", strrep("=", 60), "\n")
+    +   
+      +   # Definir los percentiles requeridos
+      +   percentiles <- c(0.25, 0.5, 0.75, 0.8, 0.9)
+      +   nombres_percentiles <- c("P25", "P50", "P75", "P80", "P90")
+      +   
+        +   # Crear lista para almacenar resultados
+        +   resultados_percentiles <- list()
+        +   
+          +   for (grupo in grupos_analizar) {
+            +     cat("\nProcesando grupo:", grupo, "\n")
+            +     
+              +     # Filtrar datos para el grupo actual
+              +     datos_grupo <- datos_completos %>%
+                +       filter(Grupo == grupo)
+              +     
+                +     if (nrow(datos_grupo) < 5) {
+                  +       cat("  Grupo tiene menos de 5 observaciones. Omitiendo.\n")
+                  +       next
+                  +     }
+              +     
+                +     # Calcular percentiles para el grupo
+                +     percentiles_grupo <- quantile(
+                  +       datos_grupo$`Días cobertura con capacitación`,
+                  +       probs = percentiles,
+                  +       na.rm = TRUE
+                  +     )
+                +     
+                  +     # Calcular estadísticas básicas
+                  +     media_grupo <- mean(datos_grupo$`Días cobertura con capacitación`, na.rm = TRUE)
+                  +     mediana_grupo <- median(datos_grupo$`Días cobertura con capacitación`, na.rm = TRUE)
+                  +     sd_grupo <- sd(datos_grupo$`Días cobertura con capacitación`, na.rm = TRUE)
+                  +     
+                    +     # Crear fila de resultados
+                    +     fila_resultado <- data.frame(
+                      +       Grupo = grupo,
+                      +       N_Observaciones = nrow(datos_grupo),
+                      +       Media = round(media_grupo, 2),
+                      +       Mediana = round(mediana_grupo, 2),
+                      +       SD = round(sd_grupo, 2),
+                      +       Min = round(min(datos_grupo$`Días cobertura con capacitación`, na.rm = TRUE), 2),
+                      +       Max = round(max(datos_grupo$`Días cobertura con capacitación`, na.rm = TRUE), 2)
+                      +     )
+                    +     
+                      +     # Añadir percentiles
+                      +     for (i in seq_along(percentiles)) {
+                        +       fila_resultado[[nombres_percentiles[i]]] <- round(percentiles_grupo[i], 2)
+                        +     }
+                    +     
+                      +     # Calcular rango intercuartílico (IQR)
+                      +     fila_resultado$IQR <- round(fila_resultado$P75 - fila_resultado$P25, 2)
+                      +     
+                        +     # Evaluar distribución
+                        +     fila_resultado$Distribucion <- ifelse(
+                          +       media_grupo > 0 & abs(media_grupo - mediana_grupo) / media_grupo < 0.1,
+                          +       "Simétrica",
+                          +       "Sesgada"
+                          +     )
+                        +     
+                          +     # Recomendación de meta
+                          +     fila_resultado$Meta_Recomendada <- case_when(
+                            +       fila_resultado$Distribucion == "Simétrica" ~ round(mediana_grupo),
+                            +       TRUE ~ round(0.7 * fila_resultado$P75 + 0.3 * fila_resultado$P25)
+                            +     )
+                          +     
+                            +     resultados_percentiles[[grupo]] <- fila_resultado
+                            +   }
+        +   
+          +   # Combinar todos los resultados
+          +   if (length(resultados_percentiles) > 0) {
+            +     tabla_final <- bind_rows(resultados_percentiles)
+            +     
+              +     # Ordenar por grupo
+              +     orden_grupos <- c("ODG", "COBRANZA", "SUCURSAL", "PLAZA")
+              +     tabla_final$Grupo <- factor(tabla_final$Grupo, levels = orden_grupos)
+              +     tabla_final <- tabla_final %>%
+                +       arrange(Grupo)
+              +     
+                +     # Crear hoja adicional con resumen comparativo
+                +     resumen_comparativo <- tabla_final %>%
+                  +       select(Grupo, N_Observaciones, Media, SD, Mediana, P25, P50, P75, P80, P90, Meta_Recomendada) %>%
+                  +       mutate(
+                    +         Coef_Variacion = ifelse(Media > 0, round((SD / Media) * 100, 2), NA),
+                    +         Dif_P90_P25 = round(P90 - P25, 2),
+                    +         Eficiencia_Relativa = ifelse(Media > 0, round((P75 - P25) / Media * 100, 2), NA),
+                    +         Ranking_Variabilidad = rank(Coef_Variacion)
+                    +       )
+                +     
+                  +     # Crear archivo Excel con múltiples hojas
+                  +     file_path <- file.path(output_dir, "percentiles_por_grupo.xlsx")
+                  +     
+                    +     # Lista de hojas
+                    +     hojas_excel <- list(
+                      +       "Percentiles_Completos" = tabla_final,
+                      +       "Resumen_Comparativo" = resumen_comparativo,
+                      +       "Metadatos" = data.frame(
+                        +         Descripcion = c(
+                          +           "P25: Percentil 25 (primer cuartil) - 25% de los valores están por debajo",
+                          +           "P50: Percentil 50 (mediana) - 50% de los valores están por debajo",
+                          +           "P75: Percentil 75 (tercer cuartil) - 75% de los valores están por debajo",
+                          +           "P80: Percentil 80 - 80% de los valores están por debajo",
+                          +           "P90: Percentil 90 - 90% de los valores están por debajo",
+                          +           "IQR: Rango intercuartílico (P75 - P25) - dispersión del 50% central",
+                          +           "Coef_Variacion: Coeficiente de variación (SD/Media*100) - variabilidad relativa",
+                          +           "Meta_Recomendada: Meta sugerida (simétrica=mediana, sesgada=0.7*P75+0.3*P25)"
+                          +         )
+                        +       )
+                      +     )
+                    +     
+                      +     # Escribir archivo Excel
+                      +     write_xlsx(hojas_excel, file_path)
+                    +     
+                      +     cat("\n", strrep("-", 60))
+                    +     cat("\nTABLA DE PERCENTILES CREADA EXITOSAMENTE")
+                    +     cat("\nArchivo guardado en:", file_path)
+                    +     cat("\n", strrep("-", 60))
+                    +     
+                      +     # Mostrar resumen en consola
+                      +     cat("\n\nRESUMEN DE PERCENTILES POR GRUPO:\n\n")
+                    +     print(tabla_final %>% select(Grupo, N_Observaciones, P25, P50, P75, P80, P90, Meta_Recomendada))
+                    +     
+                      +     # Gráfico comparativo de percentiles
+                      +     p_percentiles_comparativo <- ggplot(tabla_final) +
+                        +       geom_segment(aes(x = Grupo, xend = Grupo, y = P25, yend = P75), 
+                                             +                    color = "gray70", size = 2, alpha = 0.7) +
+                        +       geom_point(aes(x = Grupo, y = P25), color = "blue", size = 4) +
+                        +       geom_point(aes(x = Grupo, y = P50), color = "darkgreen", size = 5, shape = 18) +
+                        +       geom_point(aes(x = Grupo, y = P75), color = "red", size = 4) +
+                        +       geom_point(aes(x = Grupo, y = P80), color = "orange", size = 3, shape = 15) +
+                        +       geom_point(aes(x = Grupo, y = P90), color = "purple", size = 3, shape = 17) +
+                        +       geom_text(aes(x = Grupo, y = P50, label = paste("Meta:", Meta_Recomendada)), 
+                                          +                 vjust = -1.5, size = 3, color = "darkgreen") +
+                        +       labs(title = "Comparativa de Percentiles por Grupo de Gestión",
+                                     +            subtitle = "P25(azul) • P50(verde/rombo) • P75(rojo) • P80(naranja/cuadrado) • P90(púrpura/triángulo)",
+                                     +            x = "Grupo de Gestión",
+                                     +            y = "Días de Cobertura") +
+                        +       theme_minimal() +
+                        +       theme(axis.text.x = element_text(angle = 45, hjust = 1))
+                      +     
+                        +     ggsave(file.path(output_dir, "comparativa_percentiles_grupos.png"), 
+                                     +            p_percentiles_comparativo, width = 12, height = 8, dpi = 300)
+                      +     
+                        +     # Gráfico de cajas comparativo
+                        +     datos_grafico <- datos_completos %>%
+                          +       filter(Grupo %in% grupos_analizar) %>%
+                          +       mutate(Grupo = factor(Grupo, levels = orden_grupos))
+                        +     
+                          +     p_boxplot_comparativo <- ggplot(datos_grafico, aes(x = Grupo, y = `Días cobertura con capacitación`)) +
+                            +       geom_boxplot(aes(fill = Grupo), alpha = 0.7, outlier.shape = NA) +
+                            +       stat_summary(fun = median, geom = "point", shape = 18, size = 4, color = "darkred") +
+                            +       coord_cartesian(ylim = c(
+                              +         max(0, min(datos_grafico$`Días cobertura con capacitación`, na.rm = TRUE) - 5),
+                              +         quantile(datos_grafico$`Días cobertura con capacitación`, 0.95, na.rm = TRUE)
+                              +       )) +
+                            +       labs(title = "Distribución de Días de Cobertura por Grupo",
+                                         +            subtitle = "Cajas muestran P25, P50 (línea), P75. Puntos atípicos limitados para mejor visualización",
+                                         +            x = "Grupo de Gestión",
+                                         +            y = "Días de Cobertura") +
+                            +       theme_minimal() +
+                            +       theme(legend.position = "none",
+                                          +             axis.text.x = element_text(angle = 45, hjust = 1))
+                          +     
+                            +     ggsave(file.path(output_dir, "boxplot_comparativo_grupos.png"), 
+                                         +            p_boxplot_comparativo, width = 12, height = 8, dpi = 300)
+                          +     
+                            +     # Crear tabla resumen para visualización
+                            +     tabla_resumen <- tabla_final %>%
+                              +       select(Grupo, N_Observaciones, P25, P50, P75, P80, P90, Meta_Recomendada) %>%
+                              +       rename(
+                                +         "Percentil 25" = P25,
+                                +         "Percentil 50 (Mediana)" = P50,
+                                +         "Percentil 75" = P75,
+                                +         "Percentil 80" = P80,
+                                +         "Percentil 90" = P90,
+                                +         "Meta Sugerida" = Meta_Recomendada
+                                +       )
+                            +     
+                              +     # Guardar tabla resumen como CSV adicional
+                              +     write.csv(tabla_resumen, file.path(output_dir, "resumen_percentiles_simplificado.csv"), 
+                                              +               row.names = FALSE, fileEncoding = "UTF-8")
+                            +     
+                              +     return(list(
+                                +       tabla_completa = tabla_final,
+                                +       resumen = resumen_comparativo,
+                                +       tabla_simplificada = tabla_resumen
+                                +     ))
+                            +     
+                              +   } else {
+                                +     cat("\nNo se pudo crear la tabla de percentiles. Verifique los datos.\n")
+                                +     return(NULL)
+                                +   }
+        + }
+> 
+  > # ======================================================================
+> # EJECUTAR CREACIÓN DE TABLA DE PERCENTILES
+  > # ======================================================================
+> 
+  > # Llamar a la función para crear la tabla de percentiles
+  > if (exists("datos_limpieza") && exists("grupos_existentes") && exists("output_dir")) {
+    +   cat("\n\n", strrep("*", 60))
+    +   cat("\nCREACIÓN DE TABLA CONSOLIDADA DE PERCENTILES")
+    +   cat("\n", strrep("*", 60), "\n")
+    +   
+      +   resultado_percentiles <- crear_tabla_percentiles_grupos(datos_limpieza, grupos_existentes, output_dir)
+      +   
+        +   if (!is.null(resultado_percentiles)) {
+          +     # Análisis adicional: tendencia de percentiles
+            +     analisis_tendencia <- resultado_percentiles$tabla_completa %>%
+              +       select(Grupo, P25, P50, P75, P80, P90) %>%
+              +       pivot_longer(cols = c(P25, P50, P75, P80, P90), 
+                                   +                    names_to = "Percentil", 
+                                   +                    values_to = "Valor") %>%
+              +       mutate(Percentil = factor(Percentil, levels = c("P25", "P50", "P75", "P80", "P90")))
+            +     
+              +     p_tendencia_percentiles <- ggplot(analisis_tendencia, 
+                                                      +                                       aes(x = Percentil, y = Valor, color = Grupo, group = Grupo)) +
+                +       geom_line(size = 1.5, alpha = 0.7) +
+                +       geom_point(size = 3) +
+                +       labs(title = "Tendencia de Percentiles por Grupo de Gestión",
+                             +            subtitle = "Evolución de los valores desde P25 hasta P90",
+                             +            x = "Percentil",
+                             +            y = "Días de Cobertura",
+                             +            color = "Grupo") +
+                +       theme_minimal() +
+                +       theme(legend.position = "bottom",
+                              +             plot.title = element_text(hjust = 0.5),
+                              +             plot.subtitle = element_text(hjust = 0.5))
+              +     
+                +     ggsave(file.path(output_dir, "tendencia_percentiles_grupos.png"), 
+                             +            p_tendencia_percentiles, width = 12, height = 8, dpi = 300)
+              +     
+                +     cat("\n\n", strrep("=", 60))
+              +     cat("\nANÁLISIS ADICIONAL COMPLETADO:")
+              +     cat("\n✓ Archivo Excel 'percentiles_por_grupo.xlsx' creado con 3 hojas")
+              +     cat("\n✓ Gráficos comparativos generados")
+              +     cat("\n✓ Metas recomendadas calculadas para cada grupo")
+              +     cat("\n✓ Archivo CSV adicional 'resumen_percentiles_simplificado.csv' creado")
+              +     cat("\n", strrep("=", 60), "\n")
+              +     
+                +     # Mostrar recomendaciones finales
+                +     cat("\nRECOMENDACIONES BASADAS EN PERCENTILES:\n")
+              +     for (grupo in resultado_percentiles$tabla_completa$Grupo) {
+                +       datos_grupo <- resultado_percentiles$tabla_completa %>% filter(Grupo == grupo)
+                +       cat("\n", grupo, ":")
+                +       cat("\n  • Meta sugerida:", datos_grupo$Meta_Recomendada[1], "días")
+                +       cat("\n  • Rango típico (P25-P75):", datos_grupo$P25[1], "-", datos_grupo$P75[1], "días")
+                +       cat("\n  • 80% de los casos están por debajo de:", datos_grupo$P80[1], "días")
+                +       cat("\n  • Solo 10% supera:", datos_grupo$P90[1], "días\n")
+                +     }
+              +   }
+      + } else {
+        +   cat("\nADVERTENCIA: No se pudo ejecutar la función de percentiles.")
+        +   cat("\nVariables necesarias no encontradas.\n")
+        + }
+
+
+************************************************************
+  CREACIÓN DE TABLA CONSOLIDADA DE PERCENTILES
+************************************************************ 
+  
+  ============================================================
+  CREANDO TABLA GENERAL DE PERCENTILES POR GRUPO
+============================================================ 
+  
+  Procesando grupo: SUCURSAL 
+
+Procesando grupo: COBRANZA 
+
+Procesando grupo: PLAZA 
+
+Procesando grupo: ODG 
+
+------------------------------------------------------------
+  TABLA DE PERCENTILES CREADA EXITOSAMENTE
+Archivo guardado en: C:/Users/racl26345/Documents/Reportes Automatizados/Goal Días Cobertura/percentiles_por_grupo.xlsx
+------------------------------------------------------------
+  
+  RESUMEN DE PERCENTILES POR GRUPO:
+  
+  Grupo N_Observaciones P25 P50 P75  P80   P90 Meta_Recomendada
+1      ODG             339  20  39  67 77.4 102.2               53
+2 COBRANZA             670  28  41  62 68.2 100.1               52
+3 SUCURSAL             948  17  25  36 39.0  50.0               30
+4    PLAZA             446  15  25  43 51.0  71.0               35
+
+
+============================================================
+  ANÁLISIS ADICIONAL COMPLETADO:
+  ✓ Archivo Excel 'percentiles_por_grupo.xlsx' creado con 3 hojas
+✓ Gráficos comparativos generados
+✓ Metas recomendadas calculadas para cada grupo
+✓ Archivo CSV adicional 'resumen_percentiles_simplificado.csv' creado
+============================================================ 
+  
+  RECOMENDACIONES BASADAS EN PERCENTILES:
+  
+  ODG :
+  • Meta sugerida: 53 días
+• Rango típico (P25-P75): 20 - 67 días
+• 80% de los casos están por debajo de: 77.4 días
+• Solo 10% supera: 102.2 días
+
+COBRANZA :
+  • Meta sugerida: 52 días
+• Rango típico (P25-P75): 28 - 62 días
+• 80% de los casos están por debajo de: 68.2 días
+• Solo 10% supera: 100.1 días
+
+SUCURSAL :
+  • Meta sugerida: 30 días
+• Rango típico (P25-P75): 17 - 36 días
+• 80% de los casos están por debajo de: 39 días
+• Solo 10% supera: 50 días
+
+PLAZA :
+  • Meta sugerida: 35 días
+• Rango típico (P25-P75): 15 - 43 días
+• 80% de los casos están por debajo de: 51 días
+• Solo 10% supera: 71 días
+Aviso:
+  Using `size` aesthetic for lines was deprecated in ggplot2 3.4.0.
+ℹ Please use `linewidth` instead.
+This warning is displayed once every 8 hours.
+Call `lifecycle::last_lifecycle_warnings()` to see where this warning was generated. 
